@@ -82,10 +82,12 @@ export default function RegisterPage() {
           position="absolute"
           inset={0}
           direction="column"
-          justify="space-between"
+          align="center"
+          justify="center"
           p={{ base: 10, xl: 14 }}
+          textAlign="center"
         >
-          <Box>
+          <Box mb={8}>
             <Image src="/logo_light.png" alt="RehearSync" width={180} height={45} />
           </Box>
 
@@ -95,13 +97,13 @@ export default function RegisterPage() {
               <br />
               Start rehearsing.
             </Heading>
-            <Text color="gray.300" fontSize="md" maxW="380px" lineHeight="1.7" mb={8}>
+            <Text color="gray.300" fontSize="md" maxW="380px" mx="auto" lineHeight="1.7" mb={8}>
               The free plan includes everything you need to see if RehearSync
               fits your workflow. No credit card, no trial timer.
             </Text>
 
             {/* What you get with free */}
-            <VStack align="start" gap={4}>
+            <VStack align="center" gap={4}>
               {PERKS.map((perk) => (
                 <Flex key={perk.label} align="start" gap={3}>
                   <Box
