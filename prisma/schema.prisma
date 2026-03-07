@@ -49,9 +49,10 @@ model User {
   passwordHash  String?
 
   // Subscription
-  tier             String   @default("free") // free | band | agent
-  subscriptionId   String?  @map("subscription_id") // external payment provider ID
-  subscribedAt     DateTime? @map("subscribed_at")
+  tier               String   @default("free") // free | band | agent
+  stripeCustomerId   String?  @unique @map("stripe_customer_id")
+  subscriptionId     String?  @map("subscription_id") // Stripe subscription ID
+  subscribedAt       DateTime? @map("subscribed_at")
   subscriptionEndsAt DateTime? @map("subscription_ends_at")
 
   accounts Account[]
