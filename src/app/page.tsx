@@ -50,7 +50,7 @@ const PLANS = [
       "Arrangement versioning",
       "Priority support",
     ],
-    cta: "Start Free Trial",
+    cta: "Subscribe",
     highlight: true,
   },
   {
@@ -70,7 +70,7 @@ const PLANS = [
       "Session history & analytics",
       "Dedicated support",
     ],
-    cta: "Start Free Trial",
+    cta: "Subscribe",
     highlight: false,
   },
 ];

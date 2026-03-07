@@ -73,7 +73,7 @@ const PLANS = [
 export default function PricingPage() {
   const [interval, setInterval] = useState<"monthly" | "yearly">("monthly");
   const [loadingTier, setLoadingTier] = useState<string | null>(null);
-  const { data: user } = useApiQuery<UserProfile>("/api/v1/me", ["me"]);
+  const { data: user } = useApiQuery<UserProfile>(["me"], "/me");
 
   const currentTier = user?.tier || "free";
 
@@ -114,8 +114,7 @@ export default function PricingPage() {
           Choose your plan
         </Heading>
         <Text color="gray.400" maxW="500px">
-          Start free, upgrade when your band is ready. All plans include a
-          14-day free trial.
+          Start free, upgrade when your band is ready.
         </Text>
 
         {/* Interval toggle */}
@@ -252,7 +251,7 @@ export default function PricingPage() {
                         onClick={() => handleSubscribe(plan.tier as "band" | "agent")}
                         loading={loadingTier === plan.tier}
                       >
-                        {currentTier === "free" ? "Start Free Trial" : "Upgrade"}
+                        {currentTier === "free" ? "Subscribe" : "Upgrade"}
                       </Button>
                     )}
                   </Box>
