@@ -38,7 +38,7 @@ export async function listAudioAssets(arrangementId: string) {
     orderBy: [{ assetRole: "asc" }, { versionNum: "desc" }],
     include: {
       storageObject: {
-        select: { originalFileName: true, mimeType: true, sizeBytes: true },
+        select: { objectKey: true, originalFileName: true, mimeType: true, sizeBytes: true },
       },
     },
   });

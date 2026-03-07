@@ -24,6 +24,7 @@ import { useApiQuery, useApiMutation } from "@/hooks/useApi";
 import { useUpload } from "@/hooks/useUpload";
 import { FileDropzone } from "@/components/uploads/FileDropzone";
 import { SheetMusicViewer } from "@/components/sheet-music/SheetMusicViewer";
+import { AudioPlayer } from "@/components/audio/AudioPlayer";
 
 interface Part {
   id: string;
@@ -57,7 +58,12 @@ interface Arrangement {
   status: string;
   parts: Part[];
   sheetMusicAssets: { id: string; fileType: string; partId: string }[];
-  audioAssets: { id: string; assetRole: string; stemName: string | null }[];
+  audioAssets: {
+    id: string;
+    assetRole: string;
+    stemName: string | null;
+    storageObject: { objectKey: string; originalFileName: string };
+  }[];
   assignments: {
     id: string;
     member: { id: string; displayName: string };
@@ -475,27 +481,14 @@ export default function ArrangementDetailPage() {
                   </Text>
                 </Box>
               ) : (
-                <VStack align="stretch" gap={2}>
-                  {arrangement.audioAssets.map((audio) => (
-                    <Flex
-                      key={audio.id}
-                      justify="space-between"
-                      align="center"
-                      p={3}
-                      bg="gray.50"
-                      borderRadius="md"
-                    >
-                      <Flex align="center" gap={2}>
-                        <Text fontSize="sm">🎧</Text>
-                        <Text fontSize="sm" fontWeight="medium">
-                          {audio.assetRole.replace("_", " ")}
-                          {audio.stemName ? ` — ${audio.stemName}` : ""}
-                        </Text>
-                      </Flex>
-                      <Badge colorPalette="green" variant="subtle">Active</Badge>
-                    </Flex>
-                  ))}
-                </VStack>
+                <AudioPlayer
+                  tracks={arrangement.audioAssets.map((a) => ({
+                    id: a.id,
+                    url: `/api/v1/files/${a.storageObject.objectKey}`,
+                    label: a.stemName || a.assetRole.replace("_", " "),
+                    role: a.assetRole,
+                  }))}
+                />
               )}
             </Card.Body>
           </Card.Root>

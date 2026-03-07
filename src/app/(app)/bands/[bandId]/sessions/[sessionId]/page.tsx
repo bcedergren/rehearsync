@@ -8,13 +8,19 @@ import {
   Text,
   Flex,
   Badge,
-  SimpleGrid,
-  VStack,
   Table,
   Spinner,
 } from "@chakra-ui/react";
 import { useParams } from "next/navigation";
 import { useApiQuery, useApiMutation } from "@/hooks/useApi";
+import { AudioPlayer } from "@/components/audio/AudioPlayer";
+
+interface AudioAsset {
+  id: string;
+  assetRole: string;
+  stemName: string | null;
+  storageObject: { objectKey: string; originalFileName: string };
+}
 
 interface Session {
   id: string;
@@ -41,6 +47,13 @@ export default function SessionControlPage() {
   const { data: session, isLoading } = useApiQuery<Session>(
     ["session", sessionId],
     `/sessions/${sessionId}`
+  );
+
+  const arrangementId = session?.arrangement.id;
+  const { data: audioAssets } = useApiQuery<AudioAsset[]>(
+    ["audio", arrangementId || ""],
+    `/arrangements/${arrangementId}/audio`,
+    { enabled: !!arrangementId }
   );
 
   const playMutation = useApiMutation(
@@ -164,6 +177,29 @@ export default function SessionControlPage() {
           )}
         </Card.Body>
       </Card.Root>
+
+      {/* Audio Player */}
+      {audioAssets && audioAssets.length > 0 && (
+        <Card.Root mb={6}>
+          <Card.Body>
+            <Heading size="sm" mb={3}>
+              Audio
+            </Heading>
+            <AudioPlayer
+              tracks={audioAssets
+                .filter((a) => a.storageObject?.objectKey)
+                .map((a) => ({
+                  id: a.id,
+                  url: `/api/v1/files/${a.storageObject.objectKey}`,
+                  label: a.stemName || a.assetRole.replace("_", " "),
+                  role: a.assetRole,
+                }))}
+              positionMs={transport?.positionMs}
+              transportStatus={transport?.status}
+            />
+          </Card.Body>
+        </Card.Root>
+      )}
 
       {/* Participants */}
       <Card.Root>

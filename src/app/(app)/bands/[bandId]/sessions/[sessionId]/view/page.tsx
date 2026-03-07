@@ -7,11 +7,11 @@ import {
   Badge,
   Flex,
   Card,
-  VStack,
 } from "@chakra-ui/react";
 import { useParams } from "next/navigation";
 import { useApiQuery } from "@/hooks/useApi";
 import { SheetMusicViewer } from "@/components/sheet-music/SheetMusicViewer";
+import { AudioPlayer } from "@/components/audio/AudioPlayer";
 
 interface MusicianView {
   session: { id: string; state: string };
@@ -34,6 +34,7 @@ interface MusicianView {
     id: string;
     assetRole: string;
     stemName: string | null;
+    storageObject: { objectKey: string; originalFileName: string };
   }[];
   sections: { id: string; name: string; startBar: number }[];
 }
@@ -141,6 +142,27 @@ export default function MusicianViewPage() {
           )}
         </Card.Body>
       </Card.Root>
+
+      {/* Audio player */}
+      {view.audio.length > 0 && (
+        <Card.Root mb={4}>
+          <Card.Body>
+            <Heading size="sm" mb={3}>
+              Audio
+            </Heading>
+            <AudioPlayer
+              tracks={view.audio.map((a) => ({
+                id: a.id,
+                url: `/api/v1/files/${a.storageObject.objectKey}`,
+                label: a.stemName || a.assetRole.replace("_", " "),
+                role: a.assetRole,
+              }))}
+              positionMs={view.transport?.positionMs}
+              transportStatus={view.transport?.status}
+            />
+          </Card.Body>
+        </Card.Root>
+      )}
 
       {/* Section markers */}
       {view.sections.length > 0 && (

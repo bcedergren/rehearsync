@@ -45,7 +45,14 @@ export async function getArrangement(arrangementId: string) {
         },
       },
       sheetMusicAssets: { where: { isActive: true } },
-      audioAssets: { where: { isActive: true } },
+      audioAssets: {
+        where: { isActive: true },
+        include: {
+          storageObject: {
+            select: { objectKey: true, originalFileName: true },
+          },
+        },
+      },
       assignments: {
         include: {
           member: { select: { id: true, displayName: true } },
