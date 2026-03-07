@@ -73,10 +73,12 @@ export default function LoginPage() {
           position="absolute"
           inset={0}
           direction="column"
-          justify="space-between"
+          align="center"
+          justify="center"
           p={{ base: 10, xl: 14 }}
+          textAlign="center"
         >
-          <Box>
+          <Box mb={8}>
             <Image src="/logo_light.png" alt="RehearSync" width={180} height={45} />
           </Box>
 
@@ -86,13 +88,13 @@ export default function LoginPage() {
               <br />
               finally organized.
             </Heading>
-            <Text color="gray.300" fontSize="md" maxW="380px" lineHeight="1.7" mb={8}>
+            <Text color="gray.300" fontSize="md" maxW="380px" mx="auto" lineHeight="1.7" mb={8}>
               Upload charts, assign parts, sync playback — stop wasting
               the first 20 minutes of every practice sorting out who has what.
             </Text>
 
             {/* Social proof pills */}
-            <Flex gap={3} flexWrap="wrap">
+            <Flex gap={3} flexWrap="wrap" justify="center">
               <Box bg="whiteAlpha.100" backdropFilter="blur(8px)" borderRadius="full" px={4} py={2}>
                 <Text fontSize="xs" color="gray.300" fontWeight="medium">
                   PDF & MusicXML support
