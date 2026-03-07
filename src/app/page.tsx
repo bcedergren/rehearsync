@@ -9,15 +9,19 @@ import {
   SimpleGrid,
   Card,
   VStack,
+  Badge,
 } from "@chakra-ui/react";
 import Image from "next/image";
 import NextLink from "next/link";
+import { useState } from "react";
 
 const PLANS = [
   {
     name: "Free",
-    price: "$0",
+    monthlyPrice: "$0",
+    yearlyPrice: "$0",
     period: "forever",
+    yearlyPeriod: "forever",
     description: "Try it out — no credit card needed",
     features: [
       "1 band",
@@ -31,8 +35,10 @@ const PLANS = [
   },
   {
     name: "Band",
-    price: "$29.99",
+    monthlyPrice: "$29.99",
+    yearlyPrice: "$299",
     period: "/month",
+    yearlyPeriod: "/year",
     description: "For active bands and ensembles",
     features: [
       "1 band",
@@ -49,8 +55,10 @@ const PLANS = [
   },
   {
     name: "Agent",
-    price: "$99.99",
+    monthlyPrice: "$99.99",
+    yearlyPrice: "$999",
     period: "/month",
+    yearlyPeriod: "/year",
     description: "For music directors and large groups",
     features: [
       "Everything in Band",
@@ -68,6 +76,7 @@ const PLANS = [
 ];
 
 export default function HomePage() {
+  const [interval, setInterval] = useState<"monthly" | "yearly">("monthly");
   return (
     <Box bg="white" color="gray.800" minH="100vh">
       {/* Navbar */}
@@ -500,9 +509,37 @@ export default function HomePage() {
           <Heading size={{ base: "xl", md: "2xl" }} mb={3} color="gray.900">
             Pick what fits your band
           </Heading>
-          <Text color="gray.500" fontSize="lg" maxW="480px" mx="auto">
+          <Text color="gray.500" fontSize="lg" maxW="480px" mx="auto" mb={6}>
             Start free. Upgrade when you need more songs, members, or live sync.
           </Text>
+          <Flex justify="center">
+            <Flex
+              bg="gray.100"
+              borderRadius="lg"
+              p={1}
+              gap={1}
+            >
+              <Button
+                size="sm"
+                variant={interval === "monthly" ? "solid" : "ghost"}
+                colorPalette={interval === "monthly" ? "blue" : undefined}
+                onClick={() => setInterval("monthly")}
+              >
+                Monthly
+              </Button>
+              <Button
+                size="sm"
+                variant={interval === "yearly" ? "solid" : "ghost"}
+                colorPalette={interval === "yearly" ? "blue" : undefined}
+                onClick={() => setInterval("yearly")}
+              >
+                Yearly
+                <Badge ml={2} colorPalette="green" variant="solid" fontSize="xs">
+                  Save 17%
+                </Badge>
+              </Button>
+            </Flex>
+          </Flex>
         </Box>
         <SimpleGrid columns={{ base: 1, md: 3 }} gap={6} alignItems="stretch" pt={{ md: 10 }}>
           {PLANS.map((plan) => (
@@ -538,10 +575,10 @@ export default function HomePage() {
                 </Text>
                 <Flex align="baseline" gap={1} mb={6}>
                   <Text fontSize="4xl" fontWeight="bold" color={plan.highlight ? "white" : "gray.900"}>
-                    {plan.price}
+                    {interval === "monthly" ? plan.monthlyPrice : plan.yearlyPrice}
                   </Text>
                   <Text fontSize="sm" color={plan.highlight ? "blue.100" : "gray.500"}>
-                    {plan.period}
+                    {interval === "monthly" ? plan.period : plan.yearlyPeriod}
                   </Text>
                 </Flex>
                 <VStack align="stretch" gap={2} flex={1}>
