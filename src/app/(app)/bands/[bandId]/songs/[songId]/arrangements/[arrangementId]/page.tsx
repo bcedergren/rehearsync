@@ -23,6 +23,7 @@ import { useState } from "react";
 import { useApiQuery, useApiMutation } from "@/hooks/useApi";
 import { useUpload } from "@/hooks/useUpload";
 import { FileDropzone } from "@/components/uploads/FileDropzone";
+import { SheetMusicViewer } from "@/components/sheet-music/SheetMusicViewer";
 
 interface Part {
   id: string;
@@ -30,7 +31,11 @@ interface Part {
   partName: string | null;
   isRequired: boolean;
   displayOrder: number;
-  sheetMusicAssets: { id: string; fileType: string }[];
+  sheetMusicAssets: {
+    id: string;
+    fileType: string;
+    storageObject: { objectKey: string; originalFileName: string };
+  }[];
   assignments: { member: { id: string; displayName: string } }[];
 }
 
@@ -127,6 +132,13 @@ export default function ArrangementDetailPage() {
     "POST",
     { invalidateKeys: [["arrangement", arrangementId], ["readiness", arrangementId]] }
   );
+
+  // Preview sheet music state
+  const [previewAsset, setPreviewAsset] = useState<{
+    objectKey: string;
+    fileType: string;
+    fileName: string;
+  } | null>(null);
 
   // Upload Sheet Music state
   const [showUploadSheet, setShowUploadSheet] = useState(false);
@@ -403,9 +415,25 @@ export default function ArrangementDetailPage() {
                       </Table.Cell>
                       <Table.Cell>
                         {part.sheetMusicAssets.length > 0 ? (
-                          <Badge colorPalette="green" variant="subtle">
-                            {part.sheetMusicAssets[0].fileType.toUpperCase()}
-                          </Badge>
+                          <Flex align="center" gap={2}>
+                            <Badge colorPalette="green" variant="subtle">
+                              {part.sheetMusicAssets[0].fileType.toUpperCase()}
+                            </Badge>
+                            <Button
+                              size="xs"
+                              variant="ghost"
+                              colorPalette="blue"
+                              onClick={() =>
+                                setPreviewAsset({
+                                  objectKey: part.sheetMusicAssets[0].storageObject.objectKey,
+                                  fileType: part.sheetMusicAssets[0].fileType,
+                                  fileName: part.sheetMusicAssets[0].storageObject.originalFileName,
+                                })
+                              }
+                            >
+                              Preview
+                            </Button>
+                          </Flex>
                         ) : (
                           <Text fontSize="sm" color="gray.400">—</Text>
                         )}
@@ -589,6 +617,33 @@ export default function ArrangementDetailPage() {
                 </Button>
               </Flex>
             </Dialog.Footer>
+          </Dialog.Content>
+        </Dialog.Positioner>
+      </Dialog.Root>
+
+      {/* Sheet Music Preview Modal */}
+      <Dialog.Root
+        open={!!previewAsset}
+        onOpenChange={(e) => { if (!e.open) setPreviewAsset(null); }}
+      >
+        <Dialog.Backdrop />
+        <Dialog.Positioner>
+          <Dialog.Content maxW="900px" w="90vw">
+            <Dialog.Header>
+              <Dialog.Title>Sheet Music Preview</Dialog.Title>
+              <Dialog.CloseTrigger asChild>
+                <CloseButton size="sm" />
+              </Dialog.CloseTrigger>
+            </Dialog.Header>
+            <Dialog.Body>
+              {previewAsset && (
+                <SheetMusicViewer
+                  fileUrl={`/api/v1/files/${previewAsset.objectKey}`}
+                  fileType={previewAsset.fileType as "pdf" | "musicxml"}
+                  fileName={previewAsset.fileName}
+                />
+              )}
+            </Dialog.Body>
           </Dialog.Content>
         </Dialog.Positioner>
       </Dialog.Root>

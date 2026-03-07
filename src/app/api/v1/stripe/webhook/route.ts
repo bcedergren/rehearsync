@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
           data: {
             tier: "free",
             subscriptionId: null,
-            subscriptionEndsAt: new Date(subscription.current_period_end * 1000),
+            subscriptionEndsAt: new Date(subscription.items.data[0].current_period_end * 1000),
           },
         });
       }
@@ -73,7 +73,7 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription) {
       subscriptionId: subscription.id,
       subscribedAt: new Date(subscription.start_date * 1000),
       subscriptionEndsAt: new Date(
-        subscription.current_period_end * 1000
+        subscription.items.data[0].current_period_end * 1000
       ),
     },
   });

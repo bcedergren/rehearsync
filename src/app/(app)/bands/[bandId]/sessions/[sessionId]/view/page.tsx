@@ -11,6 +11,7 @@ import {
 } from "@chakra-ui/react";
 import { useParams } from "next/navigation";
 import { useApiQuery } from "@/hooks/useApi";
+import { SheetMusicViewer } from "@/components/sheet-music/SheetMusicViewer";
 
 interface MusicianView {
   session: { id: string; state: string };
@@ -26,8 +27,8 @@ interface MusicianView {
   } | null;
   sheetMusic: {
     id: string;
-    fileType: string;
-    storageObject: { originalFileName: string };
+    fileType: "pdf" | "musicxml";
+    storageObject: { originalFileName: string; objectKey: string };
   } | null;
   audio: {
     id: string;
@@ -115,31 +116,16 @@ export default function MusicianViewPage() {
         </Card.Root>
       )}
 
-      {/* Score area placeholder */}
+      {/* Score viewer */}
       <Card.Root mb={4} minH="400px">
         <Card.Body>
           {view.sheetMusic ? (
-            <VStack>
-              <Text fontWeight="semibold">
-                {view.sheetMusic.storageObject.originalFileName}
-              </Text>
-              <Text color="gray.500" fontSize="sm">
-                File type: {view.sheetMusic.fileType}
-              </Text>
-              <Box
-                w="full"
-                h="300px"
-                bg="gray.100"
-                borderRadius="md"
-                display="flex"
-                alignItems="center"
-                justifyContent="center"
-              >
-                <Text color="gray.400">
-                  Score viewer will render here (OSMD / PDF)
-                </Text>
-              </Box>
-            </VStack>
+            <SheetMusicViewer
+              fileUrl={`/api/v1/files/${view.sheetMusic.storageObject.objectKey}`}
+              fileType={view.sheetMusic.fileType}
+              fileName={view.sheetMusic.storageObject.originalFileName}
+              currentBar={view.transport?.currentBar}
+            />
           ) : (
             <Flex
               h="300px"

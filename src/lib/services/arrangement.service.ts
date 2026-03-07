@@ -27,7 +27,16 @@ export async function getArrangement(arrangementId: string) {
       parts: {
         orderBy: { displayOrder: "asc" },
         include: {
-          sheetMusicAssets: { where: { isActive: true }, select: { id: true, fileType: true } },
+          sheetMusicAssets: {
+            where: { isActive: true },
+            select: {
+              id: true,
+              fileType: true,
+              storageObject: {
+                select: { objectKey: true, originalFileName: true },
+              },
+            },
+          },
           assignments: {
             include: {
               member: { select: { id: true, displayName: true } },
