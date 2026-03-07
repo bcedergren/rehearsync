@@ -1,0 +1,216 @@
+"use client";
+
+import {
+  Box,
+  Button,
+  Card,
+  Heading,
+  Text,
+  Flex,
+  Badge,
+  SimpleGrid,
+  VStack,
+  Table,
+  Spinner,
+} from "@chakra-ui/react";
+import { useParams } from "next/navigation";
+import { useApiQuery, useApiMutation } from "@/hooks/useApi";
+
+interface Session {
+  id: string;
+  state: string;
+  arrangement: { id: string; name: string; versionLabel: string };
+  leader: { id: string; displayName: string };
+  participants: {
+    id: string;
+    connectionState: string;
+    member: { id: string; displayName: string };
+    part: { id: string; instrumentName: string } | null;
+  }[];
+  transportState: {
+    status: string;
+    positionMs: number;
+    currentBar: number | null;
+  } | null;
+}
+
+export default function SessionControlPage() {
+  const params = useParams();
+  const sessionId = params.sessionId as string;
+
+  const { data: session, isLoading } = useApiQuery<Session>(
+    ["session", sessionId],
+    `/sessions/${sessionId}`
+  );
+
+  const playMutation = useApiMutation(
+    `/sessions/${sessionId}/transport/play`,
+    "POST",
+    { invalidateKeys: [["session", sessionId]] }
+  );
+
+  const pauseMutation = useApiMutation(
+    `/sessions/${sessionId}/transport/pause`,
+    "POST",
+    { invalidateKeys: [["session", sessionId]] }
+  );
+
+  const stopMutation = useApiMutation(
+    `/sessions/${sessionId}/transport/stop`,
+    "POST",
+    { invalidateKeys: [["session", sessionId]] }
+  );
+
+  const endMutation = useApiMutation(
+    `/sessions/${sessionId}/end`,
+    "POST",
+    { invalidateKeys: [["session", sessionId]] }
+  );
+
+  if (isLoading || !session) return <Flex justify="center" align="center" minH="40vh"><Spinner size="lg" color="blue.500" /></Flex>;
+
+  const transport = session.transportState;
+  const stateColor: Record<string, string> = {
+    draft: "yellow",
+    ready: "blue",
+    live: "green",
+    paused: "orange",
+    ended: "gray",
+  };
+
+  return (
+    <Box>
+      <Flex justify="space-between" align="center" mb={6}>
+        <Box>
+          <Heading size="lg">Session Control</Heading>
+          <Text color="gray.500">
+            {session.arrangement.name} {session.arrangement.versionLabel}
+          </Text>
+        </Box>
+        <Flex gap={2} align="center">
+          <Badge colorPalette={stateColor[session.state] || "gray"} fontSize="md" p={2}>
+            {session.state.toUpperCase()}
+          </Badge>
+          {session.state !== "ended" && (
+            <Button
+              colorPalette="red"
+              variant="outline"
+              size="sm"
+              onClick={() => endMutation.mutate({})}
+            >
+              End Session
+            </Button>
+          )}
+        </Flex>
+      </Flex>
+
+      {/* Transport Controls */}
+      <Card.Root mb={6}>
+        <Card.Body>
+          <Heading size="sm" mb={4}>
+            Transport
+          </Heading>
+          <Flex gap={3} align="center" mb={4}>
+            <Button
+              colorPalette="green"
+              onClick={() =>
+                playMutation.mutate({ positionMs: transport?.positionMs || 0 })
+              }
+              disabled={transport?.status === "playing"}
+            >
+              Play
+            </Button>
+            <Button
+              colorPalette="yellow"
+              onClick={() =>
+                pauseMutation.mutate({
+                  positionMs: transport?.positionMs || 0,
+                })
+              }
+              disabled={transport?.status !== "playing"}
+            >
+              Pause
+            </Button>
+            <Button
+              colorPalette="red"
+              onClick={() => stopMutation.mutate({ positionMs: 0 })}
+            >
+              Stop
+            </Button>
+          </Flex>
+          {transport && (
+            <Flex gap={6}>
+              <Text fontSize="sm">
+                Status:{" "}
+                <Text as="span" fontWeight="bold">
+                  {transport.status}
+                </Text>
+              </Text>
+              <Text fontSize="sm">
+                Position:{" "}
+                <Text as="span" fontWeight="bold">
+                  {Math.floor(transport.positionMs / 1000)}s
+                </Text>
+              </Text>
+              {transport.currentBar && (
+                <Text fontSize="sm">
+                  Bar:{" "}
+                  <Text as="span" fontWeight="bold">
+                    {transport.currentBar}
+                  </Text>
+                </Text>
+              )}
+            </Flex>
+          )}
+        </Card.Body>
+      </Card.Root>
+
+      {/* Participants */}
+      <Card.Root>
+        <Card.Body>
+          <Heading size="sm" mb={4}>
+            Connected Musicians
+          </Heading>
+          {session.participants.length === 0 ? (
+            <Text color="gray.500" fontSize="sm">
+              No participants connected.
+            </Text>
+          ) : (
+            <Table.Root size="sm">
+              <Table.Header>
+                <Table.Row>
+                  <Table.ColumnHeader>Name</Table.ColumnHeader>
+                  <Table.ColumnHeader>Part</Table.ColumnHeader>
+                  <Table.ColumnHeader>Status</Table.ColumnHeader>
+                </Table.Row>
+              </Table.Header>
+              <Table.Body>
+                {session.participants.map((p) => (
+                  <Table.Row key={p.id}>
+                    <Table.Cell>{p.member.displayName}</Table.Cell>
+                    <Table.Cell>
+                      {p.part?.instrumentName || "Unassigned"}
+                    </Table.Cell>
+                    <Table.Cell>
+                      <Badge
+                        colorPalette={
+                          p.connectionState === "ready"
+                            ? "green"
+                            : p.connectionState === "connecting"
+                              ? "yellow"
+                              : "red"
+                        }
+                      >
+                        {p.connectionState}
+                      </Badge>
+                    </Table.Cell>
+                  </Table.Row>
+                ))}
+              </Table.Body>
+            </Table.Root>
+          )}
+        </Card.Body>
+      </Card.Root>
+    </Box>
+  );
+}

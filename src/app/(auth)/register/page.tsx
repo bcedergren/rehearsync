@@ -1,0 +1,247 @@
+"use client";
+
+import {
+  Box,
+  Button,
+  Field,
+  Heading,
+  Input,
+  VStack,
+  Text,
+  Link as ChakraLink,
+  Flex,
+} from "@chakra-ui/react";
+import Image from "next/image";
+import NextLink from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+
+export default function RegisterPage() {
+  const router = useRouter();
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+
+    const res = await fetch("/api/v1/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, email, password }),
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      setError(json.error?.message || "Registration failed");
+      setLoading(false);
+      return;
+    }
+
+    router.push("/login");
+  }
+
+  const PERKS = [
+    { label: "1 band, 2 members", detail: "Enough to try it with your duo" },
+    { label: "PDF sheet music", detail: "Upload and share charts instantly" },
+    { label: "Part assignments", detail: "Everyone sees their own part" },
+  ];
+
+  return (
+    <Flex minH="100vh">
+      {/* Left hero panel — desktop only */}
+      <Box
+        display={{ base: "none", lg: "block" }}
+        w="50%"
+        position="relative"
+        overflow="hidden"
+      >
+        <Image
+          src="/signup.png"
+          alt="Band performing live"
+          fill
+          style={{ objectFit: "cover" }}
+          priority
+        />
+        {/* Dark gradient overlay */}
+        <Box
+          position="absolute"
+          inset={0}
+          bgGradient="to-t"
+          gradientFrom="blackAlpha.900"
+          gradientVia="blackAlpha.700"
+          gradientTo="blackAlpha.400"
+        />
+        {/* Content over image */}
+        <Flex
+          position="absolute"
+          inset={0}
+          direction="column"
+          justify="space-between"
+          p={{ base: 10, xl: 14 }}
+        >
+          <Box>
+            <Image src="/logo_light.png" alt="RehearSync" width={180} height={45} />
+          </Box>
+
+          <Box>
+            <Heading size={{ base: "xl", xl: "2xl" }} color="white" mb={4} lineHeight="1.2">
+              Stop emailing PDFs.
+              <br />
+              Start rehearsing.
+            </Heading>
+            <Text color="gray.300" fontSize="md" maxW="380px" lineHeight="1.7" mb={8}>
+              The free plan includes everything you need to see if RehearSync
+              fits your workflow. No credit card, no trial timer.
+            </Text>
+
+            {/* What you get with free */}
+            <VStack align="start" gap={4}>
+              {PERKS.map((perk) => (
+                <Flex key={perk.label} align="start" gap={3}>
+                  <Box
+                    w="8px"
+                    h="8px"
+                    borderRadius="full"
+                    bg="blue.400"
+                    mt="7px"
+                    flexShrink={0}
+                  />
+                  <Box>
+                    <Text color="white" fontSize="sm" fontWeight="semibold">
+                      {perk.label}
+                    </Text>
+                    <Text color="gray.400" fontSize="xs">
+                      {perk.detail}
+                    </Text>
+                  </Box>
+                </Flex>
+              ))}
+            </VStack>
+          </Box>
+        </Flex>
+      </Box>
+
+      {/* Right form panel */}
+      <Flex
+        flex={1}
+        bg="gray.900"
+        align="center"
+        justify="center"
+        p={8}
+        position="relative"
+      >
+        {/* Mobile background — subtle hero image */}
+        <Box
+          display={{ base: "block", lg: "none" }}
+          position="absolute"
+          inset={0}
+          overflow="hidden"
+        >
+          <Image
+            src="/signup.png"
+            alt=""
+            fill
+            style={{ objectFit: "cover", opacity: 0.08 }}
+          />
+        </Box>
+
+        <Box w="full" maxW="440px" position="relative" zIndex={1}>
+          {/* Mobile logo */}
+          <Box display={{ base: "block", lg: "none" }} mb={8}>
+            <Image src="/logo_light.png" alt="RehearSync" width={160} height={40} />
+          </Box>
+
+          <Heading size="xl" color="white" mb={1}>
+            Create your account
+          </Heading>
+          <Text color="gray.400" mb={8}>
+            Free forever — upgrade when your band outgrows it
+          </Text>
+
+          <form onSubmit={handleSubmit}>
+            <VStack gap={5}>
+              <Field.Root>
+                <Field.Label color="gray.300" fontSize="sm">Name</Field.Label>
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  bg="gray.800"
+                  border="1px solid"
+                  borderColor="gray.700"
+                  color="white"
+                  _hover={{ borderColor: "gray.600" }}
+                  _focus={{ borderColor: "blue.400", boxShadow: "0 0 0 1px var(--chakra-colors-blue-400)" }}
+                  size="lg"
+                  placeholder="Your display name"
+                />
+              </Field.Root>
+              <Field.Root>
+                <Field.Label color="gray.300" fontSize="sm">Email</Field.Label>
+                <Input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  bg="gray.800"
+                  border="1px solid"
+                  borderColor="gray.700"
+                  color="white"
+                  _hover={{ borderColor: "gray.600" }}
+                  _focus={{ borderColor: "blue.400", boxShadow: "0 0 0 1px var(--chakra-colors-blue-400)" }}
+                  size="lg"
+                />
+              </Field.Root>
+              <Field.Root>
+                <Field.Label color="gray.300" fontSize="sm">Password</Field.Label>
+                <Input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={8}
+                  bg="gray.800"
+                  border="1px solid"
+                  borderColor="gray.700"
+                  color="white"
+                  _hover={{ borderColor: "gray.600" }}
+                  _focus={{ borderColor: "blue.400", boxShadow: "0 0 0 1px var(--chakra-colors-blue-400)" }}
+                  size="lg"
+                  placeholder="Min 8 characters"
+                />
+              </Field.Root>
+              {error && (
+                <Box w="full" p={3} bg="red.900/30" borderRadius="md" border="1px solid" borderColor="red.700/50">
+                  <Text color="red.300" fontSize="sm">{error}</Text>
+                </Box>
+              )}
+              <Button
+                type="submit"
+                colorPalette="blue"
+                w="full"
+                size="lg"
+                loading={loading}
+                mt={2}
+              >
+                Create Account
+              </Button>
+            </VStack>
+          </form>
+
+          <Text mt={6} fontSize="sm" textAlign="center" color="gray.400">
+            Already have an account?{" "}
+            <ChakraLink asChild color="blue.300" _hover={{ color: "blue.200" }}>
+              <NextLink href="/login">Sign in</NextLink>
+            </ChakraLink>
+          </Text>
+        </Box>
+      </Flex>
+    </Flex>
+  );
+}

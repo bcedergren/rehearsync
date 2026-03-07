@@ -1,0 +1,394 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Auth (NextAuth) ────────────────────────────────────────────
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("auth_sessions")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  passwordHash  String?
+
+  // Subscription
+  tier             String   @default("free") // free | band | agent
+  subscriptionId   String?  @map("subscription_id") // external payment provider ID
+  subscribedAt     DateTime? @map("subscribed_at")
+  subscriptionEndsAt DateTime? @map("subscription_ends_at")
+
+  accounts Account[]
+  sessions Session[]
+  members  Member[]
+
+  @@map("users")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ─── Domain Models ──────────────────────────────────────────────
+
+model Band {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  members          Member[]
+  songs            Song[]
+  rehearsalSessions RehearsalSession[]
+
+  @@map("bands")
+}
+
+model Member {
+  id                String   @id @default(uuid())
+  bandId            String   @map("band_id")
+  userId            String   @map("user_id")
+  email             String
+  displayName       String   @map("display_name")
+  role              String   @default("musician") // leader | admin | musician
+  defaultInstrument String?  @map("default_instrument")
+  isActive          Boolean  @default(true) @map("is_active")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  band                    Band                      @relation(fields: [bandId], references: [id], onDelete: Cascade)
+  user                    User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  songsCreated            Song[]                    @relation("SongCreator")
+  arrangementsCreated     Arrangement[]             @relation("ArrangementCreator")
+  assignments             ArrangementMemberAssignment[]
+  uploadedStorageObjects  StorageObject[]
+  syncMapsCreated         SyncMap[]                 @relation("SyncMapCreator")
+  ledSessions             RehearsalSession[]        @relation("SessionLeader")
+  sessionParticipations   SessionParticipant[]
+  transportUpdates        TransportState[]          @relation("TransportUpdater")
+  transportEvents         TransportEvent[]
+
+  @@unique([bandId, email])
+  @@unique([bandId, userId])
+  @@map("members")
+}
+
+model Song {
+  id                String   @id @default(uuid())
+  bandId            String   @map("band_id")
+  title             String
+  artist            String?
+  notes             String?
+  defaultBpm        Decimal? @map("default_bpm") @db.Decimal
+  createdByMemberId String?  @map("created_by_member_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at")
+
+  band        Band          @relation(fields: [bandId], references: [id], onDelete: Cascade)
+  createdBy   Member?       @relation("SongCreator", fields: [createdByMemberId], references: [id])
+  arrangements Arrangement[]
+
+  @@index([bandId, title])
+  @@map("songs")
+}
+
+model Arrangement {
+  id                String    @id @default(uuid())
+  songId            String    @map("song_id")
+  name              String
+  versionLabel      String    @map("version_label")
+  status            String    @default("draft") // draft | published | archived
+  isLocked          Boolean   @default(false) @map("is_locked")
+  createdByMemberId String?   @map("created_by_member_id")
+  publishedAt       DateTime? @map("published_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  song               Song                        @relation(fields: [songId], references: [id], onDelete: Cascade)
+  createdBy          Member?                     @relation("ArrangementCreator", fields: [createdByMemberId], references: [id])
+  parts              Part[]
+  sheetMusicAssets   SheetMusicAsset[]
+  audioAssets        AudioAsset[]
+  assignments        ArrangementMemberAssignment[]
+  sectionMarkers     SectionMarker[]
+  syncMaps           SyncMap[]
+  rehearsalSessions  RehearsalSession[]
+  transportStates    TransportState[]
+
+  @@unique([songId, name, versionLabel])
+  @@index([songId, status])
+  @@map("arrangements")
+}
+
+model Part {
+  id              String   @id @default(uuid())
+  arrangementId   String   @map("arrangement_id")
+  instrumentName  String   @map("instrument_name")
+  partName        String?  @map("part_name")
+  transposition   String?
+  displayOrder    Int      @default(0) @map("display_order")
+  isRequired      Boolean  @default(true) @map("is_required")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  arrangement      Arrangement                  @relation(fields: [arrangementId], references: [id], onDelete: Cascade)
+  sheetMusicAssets SheetMusicAsset[]
+  assignments      ArrangementMemberAssignment[]
+  participants     SessionParticipant[]
+
+  @@unique([arrangementId, instrumentName, partName])
+  @@index([arrangementId, displayOrder])
+  @@map("parts")
+}
+
+model StorageObject {
+  id                  String   @id @default(uuid())
+  bucket              String
+  objectKey           String   @map("object_key")
+  originalFileName    String   @map("original_file_name")
+  mimeType            String   @map("mime_type")
+  sizeBytes           BigInt   @map("size_bytes")
+  checksumSha256      String?  @map("checksum_sha256")
+  uploadedByMemberId  String?  @map("uploaded_by_member_id")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  uploadedBy       Member?           @relation(fields: [uploadedByMemberId], references: [id])
+  sheetMusicAssets SheetMusicAsset[]
+  audioAssets      AudioAsset[]
+
+  @@unique([bucket, objectKey])
+  @@index([checksumSha256])
+  @@map("storage_objects")
+}
+
+model SheetMusicAsset {
+  id              String   @id @default(uuid())
+  arrangementId   String   @map("arrangement_id")
+  partId          String   @map("part_id")
+  storageObjectId String   @map("storage_object_id")
+  fileType        String   @map("file_type") // musicxml | pdf
+  versionNum      Int      @map("version_num")
+  isActive        Boolean  @default(false) @map("is_active")
+  status          String   @default("draft") // draft | active | retired
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  arrangement   Arrangement   @relation(fields: [arrangementId], references: [id], onDelete: Cascade)
+  part          Part          @relation(fields: [partId], references: [id], onDelete: Cascade)
+  storageObject StorageObject @relation(fields: [storageObjectId], references: [id], onDelete: Restrict)
+
+  @@unique([partId, fileType, versionNum])
+  @@index([arrangementId, partId])
+  @@map("sheet_music_assets")
+}
+
+model AudioAsset {
+  id              String   @id @default(uuid())
+  arrangementId   String   @map("arrangement_id")
+  storageObjectId String   @map("storage_object_id")
+  assetRole       String   @map("asset_role") // full_mix | stem | click | guide
+  stemName        String?  @map("stem_name")
+  channelMode     String?  @map("channel_mode") // mono | stereo
+  durationMs      Int?     @map("duration_ms")
+  sampleRateHz    Int?     @map("sample_rate_hz")
+  versionNum      Int      @map("version_num")
+  isActive        Boolean  @default(false) @map("is_active")
+  status          String   @default("draft") // draft | active | retired
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  arrangement   Arrangement @relation(fields: [arrangementId], references: [id], onDelete: Cascade)
+  storageObject StorageObject @relation(fields: [storageObjectId], references: [id], onDelete: Restrict)
+  syncMaps      SyncMap[]
+
+  @@unique([arrangementId, assetRole, stemName, versionNum])
+  @@index([arrangementId, assetRole])
+  @@map("audio_assets")
+}
+
+model ArrangementMemberAssignment {
+  id            String   @id @default(uuid())
+  arrangementId String   @map("arrangement_id")
+  memberId      String   @map("member_id")
+  partId        String   @map("part_id")
+  isDefault     Boolean  @default(true) @map("is_default")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  arrangement Arrangement @relation(fields: [arrangementId], references: [id], onDelete: Cascade)
+  member      Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  part        Part        @relation(fields: [partId], references: [id], onDelete: Cascade)
+
+  @@unique([arrangementId, memberId])
+  @@index([arrangementId, partId])
+  @@map("arrangement_member_assignments")
+}
+
+model SectionMarker {
+  id            String   @id @default(uuid())
+  arrangementId String   @map("arrangement_id")
+  name          String
+  startBar      Int      @map("start_bar")
+  endBar        Int?     @map("end_bar")
+  sortOrder     Int      @default(0) @map("sort_order")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  arrangement     Arrangement      @relation(fields: [arrangementId], references: [id], onDelete: Cascade)
+  transportStates TransportState[] @relation("CurrentSection")
+
+  @@unique([arrangementId, sortOrder])
+  @@index([arrangementId, startBar])
+  @@map("section_markers")
+}
+
+model SyncMap {
+  id                String   @id @default(uuid())
+  arrangementId     String   @map("arrangement_id")
+  audioAssetId      String   @map("audio_asset_id")
+  sourceType        String   @map("source_type") // manual | imported | generated
+  versionNum        Int      @map("version_num")
+  status            String   @default("draft") // draft | active | retired
+  isActive          Boolean  @default(false) @map("is_active")
+  createdByMemberId String?  @map("created_by_member_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  arrangement Arrangement    @relation(fields: [arrangementId], references: [id], onDelete: Cascade)
+  audioAsset  AudioAsset     @relation(fields: [audioAssetId], references: [id], onDelete: Cascade)
+  createdBy   Member?        @relation("SyncMapCreator", fields: [createdByMemberId], references: [id])
+  points      SyncMapPoint[]
+
+  @@unique([audioAssetId, versionNum])
+  @@map("sync_maps")
+}
+
+model SyncMapPoint {
+  id          String   @id @default(uuid())
+  syncMapId   String   @map("sync_map_id")
+  timeMs      Int      @map("time_ms")
+  barNumber   Int      @map("bar_number")
+  beatNumber  Int?     @map("beat_number")
+  tickOffset  Int?     @map("tick_offset")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  syncMap SyncMap @relation(fields: [syncMapId], references: [id], onDelete: Cascade)
+
+  @@unique([syncMapId, timeMs])
+  @@unique([syncMapId, barNumber, beatNumber, tickOffset])
+  @@index([syncMapId, barNumber])
+  @@map("sync_map_points")
+}
+
+// ─── Session & Transport (Phase 2) ─────────────────────────────
+
+model RehearsalSession {
+  id              String    @id @default(uuid())
+  bandId          String    @map("band_id")
+  arrangementId   String    @map("arrangement_id")
+  leaderMemberId  String    @map("leader_member_id")
+  state           String    @default("draft") // draft | ready | live | paused | ended
+  startedAt       DateTime? @map("started_at")
+  endedAt         DateTime? @map("ended_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  band           Band                @relation(fields: [bandId], references: [id], onDelete: Cascade)
+  arrangement    Arrangement         @relation(fields: [arrangementId], references: [id], onDelete: Restrict)
+  leader         Member              @relation("SessionLeader", fields: [leaderMemberId], references: [id], onDelete: Restrict)
+  participants   SessionParticipant[]
+  transportState TransportState?
+  transportEvents TransportEvent[]
+
+  @@index([bandId, state])
+  @@map("rehearsal_sessions")
+}
+
+model SessionParticipant {
+  id              String    @id @default(uuid())
+  sessionId       String    @map("session_id")
+  memberId        String    @map("member_id")
+  partId          String?   @map("part_id")
+  deviceLabel     String?   @map("device_label")
+  deviceType      String?   @map("device_type") // ipad | android_tablet | laptop | phone | desktop | unknown
+  connectionState String    @default("connecting") @map("connection_state") // connecting | ready | disconnected
+  lastSeenAt      DateTime? @map("last_seen_at")
+  joinedAt        DateTime  @default(now()) @map("joined_at")
+
+  session RehearsalSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  member  Member           @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  part    Part?            @relation(fields: [partId], references: [id], onDelete: SetNull)
+
+  @@unique([sessionId, memberId])
+  @@index([sessionId, connectionState])
+  @@map("session_participants")
+}
+
+model TransportState {
+  sessionId              String    @id @map("session_id")
+  arrangementId          String    @map("arrangement_id")
+  status                 String    @default("stopped") // stopped | playing | paused | seeking
+  positionMs             Int       @default(0) @map("position_ms")
+  currentBar             Int?      @map("current_bar")
+  currentSectionMarkerId String?   @map("current_section_marker_id")
+  startedAtServerTime    DateTime? @map("started_at_server_time")
+  updatedByMemberId      String?   @map("updated_by_member_id")
+  updatedAt              DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  session        RehearsalSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  arrangement    Arrangement      @relation(fields: [arrangementId], references: [id], onDelete: Restrict)
+  currentSection SectionMarker?   @relation("CurrentSection", fields: [currentSectionMarkerId], references: [id], onDelete: SetNull)
+  updatedBy      Member?          @relation("TransportUpdater", fields: [updatedByMemberId], references: [id])
+
+  @@map("transport_states")
+}
+
+model TransportEvent {
+  id                String   @id @default(uuid())
+  sessionId         String   @map("session_id")
+  eventType         String   @map("event_type") // play | pause | stop | seek | jump_section | activate_sheet | activate_audio
+  payload           Json
+  createdByMemberId String?  @map("created_by_member_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  session   RehearsalSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  createdBy Member?          @relation(fields: [createdByMemberId], references: [id])
+
+  @@index([sessionId, createdAt])
+  @@map("transport_events")
+}
