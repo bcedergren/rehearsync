@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { saveFile } from "@/lib/local-storage";
+import { uploadBuffer } from "@/lib/supabase-storage";
 import { v4 as uuidv4 } from "uuid";
 
 const ALLOWED_SHEET_MUSIC_TYPES = [
@@ -47,11 +47,12 @@ export async function uploadFile(
   const ext = fileName.split(".").pop() || "bin";
   const objectKey = `bands/${bandId}/${kind}/${fileId}.${ext}`;
 
-  await saveFile(objectKey, data);
+  const bucket = process.env.SUPABASE_STORAGE_BUCKET || "rehearsync-assets";
+  await uploadBuffer(bucket, objectKey, data, mimeType);
 
   const storageObject = await prisma.storageObject.create({
     data: {
-      bucket: "local",
+      bucket,
       objectKey,
       originalFileName: fileName,
       mimeType,

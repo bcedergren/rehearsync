@@ -16,15 +16,15 @@ export interface TierLimits {
 export const TIER_LIMITS: Record<Tier, TierLimits> = {
   free: {
     maxBands: 1,
-    maxMembersPerBand: 2,
-    maxSongsPerBand: 1,
-    allowMusicXml: false,
-    allowAudioUploads: false,
-    allowSectionMarkers: false,
+    maxMembersPerBand: 5,
+    maxSongsPerBand: 3,
+    allowMusicXml: true,
+    allowAudioUploads: true,
+    allowSectionMarkers: true,
     allowMultipleArrangements: false,
     allowSessions: false,
     allowTransportControls: false,
-    allowSyncMaps: false,
+    allowSyncMaps: true,
   },
   band: {
     maxBands: 1,

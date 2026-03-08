@@ -42,6 +42,42 @@ export async function createSignedDownloadUrl(
   return data.signedUrl;
 }
 
+export async function uploadBuffer(
+  bucket: string,
+  objectKey: string,
+  data: Buffer,
+  mimeType: string
+): Promise<void> {
+  const supabase = getServiceClient();
+  const { error } = await supabase.storage
+    .from(bucket)
+    .upload(objectKey, data, {
+      contentType: mimeType,
+      upsert: false,
+    });
+
+  if (error) {
+    throw new Error(`Failed to upload file: ${error.message}`);
+  }
+}
+
+export async function readObject(
+  bucket: string,
+  objectKey: string
+): Promise<Buffer> {
+  const supabase = getServiceClient();
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .download(objectKey);
+
+  if (error || !data) {
+    throw new Error(`Failed to download file: ${error?.message}`);
+  }
+
+  const arrayBuffer = await data.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
 export async function deleteObject(
   bucket: string,
   objectKey: string
