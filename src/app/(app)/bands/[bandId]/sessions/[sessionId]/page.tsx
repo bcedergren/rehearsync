@@ -13,6 +13,8 @@ import {
 } from "@chakra-ui/react";
 import { useParams } from "next/navigation";
 import { useApiQuery, useApiMutation } from "@/hooks/useApi";
+import { useWebSocket } from "@/hooks/useWebSocket";
+import { useSessionStore } from "@/stores/session.store";
 import { AudioPlayer } from "@/components/audio/AudioPlayer";
 
 interface AudioAsset {
@@ -56,6 +58,14 @@ export default function SessionControlPage() {
     { enabled: !!arrangementId }
   );
 
+  // Connect to WebSocket for real-time updates
+  const { isConnected } = useWebSocket({
+    sessionId,
+    memberId: session?.leader.id || "",
+    token: "client",
+  });
+  const wsTransport = useSessionStore((s) => s.transport);
+
   const playMutation = useApiMutation(
     `/sessions/${sessionId}/transport/play`,
     "POST",
@@ -82,7 +92,10 @@ export default function SessionControlPage() {
 
   if (isLoading || !session) return <Flex justify="center" align="center" minH="40vh"><Spinner size="lg" color="blue.500" /></Flex>;
 
-  const transport = session.transportState;
+  // Use WS transport if connected, otherwise fall back to API data
+  const transport = isConnected
+    ? { status: wsTransport.status, positionMs: wsTransport.positionMs, currentBar: wsTransport.currentBar }
+    : session.transportState;
   const stateColor: Record<string, string> = {
     draft: "yellow",
     ready: "blue",
@@ -101,6 +114,13 @@ export default function SessionControlPage() {
           </Text>
         </Box>
         <Flex gap={2} align="center">
+          <Box
+            w="8px"
+            h="8px"
+            borderRadius="full"
+            bg={isConnected ? "green.400" : "gray.400"}
+            title={isConnected ? "Live connected" : "Polling mode"}
+          />
           <Badge colorPalette={stateColor[session.state] || "gray"} fontSize="md" p={2}>
             {session.state.toUpperCase()}
           </Badge>

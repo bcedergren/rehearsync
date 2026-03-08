@@ -175,7 +175,14 @@ export async function getMusicianView(sessionId: string, memberId: string) {
     orderBy: { sortOrder: "asc" },
   });
 
+  const user = await prisma.member.findUnique({
+    where: { id: memberId },
+    select: { id: true, displayName: true },
+  });
+
   return {
+    memberId,
+    displayName: user?.displayName || "Unknown",
     session: {
       id: session.id,
       state: session.state,

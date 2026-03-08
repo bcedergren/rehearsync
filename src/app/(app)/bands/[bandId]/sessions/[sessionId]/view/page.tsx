@@ -10,10 +10,14 @@ import {
 } from "@chakra-ui/react";
 import { useParams } from "next/navigation";
 import { useApiQuery } from "@/hooks/useApi";
+import { useWebSocket } from "@/hooks/useWebSocket";
+import { useSessionStore } from "@/stores/session.store";
 import { SheetMusicViewer } from "@/components/sheet-music/SheetMusicViewer";
 import { AudioPlayer } from "@/components/audio/AudioPlayer";
 
 interface MusicianView {
+  memberId: string;
+  displayName: string;
   session: { id: string; state: string };
   transport: {
     status: string;
@@ -46,10 +50,25 @@ export default function MusicianViewPage() {
   const { data: view, isLoading } = useApiQuery<MusicianView>(
     ["musician-view", sessionId],
     `/sessions/${sessionId}/me/view`,
-    { refetchInterval: 3000 }
+    { refetchInterval: 10000 }
   );
 
+  // Connect to WebSocket for real-time transport updates
+  const { isConnected } = useWebSocket({
+    sessionId,
+    memberId: view?.memberId || "",
+    token: "client",
+  });
+
+  // Real-time transport from Zustand store (updated by WS)
+  const wsTransport = useSessionStore((s) => s.transport);
+
   if (isLoading || !view) return <Text>Loading rehearsal view...</Text>;
+
+  // Use WS transport if connected, otherwise fall back to API data
+  const transport = isConnected
+    ? { status: wsTransport.status, positionMs: wsTransport.positionMs, currentBar: wsTransport.currentBar }
+    : view.transport;
 
   const stateColor: Record<string, string> = {
     draft: "yellow",
@@ -72,6 +91,13 @@ export default function MusicianViewPage() {
           )}
         </Box>
         <Flex gap={2} align="center">
+          <Box
+            w="8px"
+            h="8px"
+            borderRadius="full"
+            bg={isConnected ? "green.400" : "gray.400"}
+            title={isConnected ? "Live connected" : "Polling mode"}
+          />
           <Badge
             colorPalette={stateColor[view.session.state] || "gray"}
             fontSize="sm"
@@ -79,36 +105,36 @@ export default function MusicianViewPage() {
           >
             {view.session.state}
           </Badge>
-          {view.transport && (
+          {transport && (
             <Badge
               colorPalette={
-                view.transport.status === "playing" ? "green" : "gray"
+                transport.status === "playing" ? "green" : "gray"
               }
               fontSize="sm"
               p={1}
             >
-              {view.transport.status}
+              {transport.status}
             </Badge>
           )}
         </Flex>
       </Flex>
 
       {/* Transport Info */}
-      {view.transport && (
+      {transport && (
         <Card.Root mb={4}>
           <Card.Body>
             <Flex gap={6}>
               <Text fontSize="sm">
                 Position:{" "}
                 <Text as="span" fontWeight="bold">
-                  {Math.floor(view.transport.positionMs / 1000)}s
+                  {Math.floor(transport.positionMs / 1000)}s
                 </Text>
               </Text>
-              {view.transport.currentBar && (
+              {transport.currentBar && (
                 <Text fontSize="sm">
                   Bar:{" "}
                   <Text as="span" fontWeight="bold">
-                    {view.transport.currentBar}
+                    {transport.currentBar}
                   </Text>
                 </Text>
               )}
@@ -125,7 +151,7 @@ export default function MusicianViewPage() {
               fileUrl={`/api/v1/files/${view.sheetMusic.storageObject.objectKey}`}
               fileType={view.sheetMusic.fileType}
               fileName={view.sheetMusic.storageObject.originalFileName}
-              currentBar={view.transport?.currentBar}
+              currentBar={transport?.currentBar}
             />
           ) : (
             <Flex
@@ -157,8 +183,8 @@ export default function MusicianViewPage() {
                 label: a.stemName || a.assetRole.replace("_", " "),
                 role: a.assetRole,
               }))}
-              positionMs={view.transport?.positionMs}
-              transportStatus={view.transport?.status}
+              positionMs={transport?.positionMs}
+              transportStatus={transport?.status}
             />
           </Card.Body>
         </Card.Root>

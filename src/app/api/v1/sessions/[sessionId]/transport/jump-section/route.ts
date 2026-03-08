@@ -5,6 +5,7 @@ import { transportJumpSectionSchema } from "@/lib/validators/transport";
 import * as transportService from "@/lib/services/transport.service";
 import { prisma } from "@/lib/prisma";
 import { requireFeature } from "@/lib/subscriptions/guards";
+import { broadcastSeek } from "@/lib/ws-broadcast";
 
 export const POST = withAuth(async (req: NextRequest, ctx, params) => {
   await requireFeature(ctx.userId, "allowTransportControls");
@@ -27,5 +28,11 @@ export const POST = withAuth(async (req: NextRequest, ctx, params) => {
     member.id,
     parsed.data.sectionMarkerId
   );
+
+  await broadcastSeek(params.sessionId, transport.positionMs, {
+    currentBar: transport.currentBar ?? undefined,
+    sectionMarkerId: transport.currentSectionMarkerId ?? undefined,
+  });
+
   return response.ok(transport);
 });
