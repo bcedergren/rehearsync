@@ -114,6 +114,14 @@ const STEP_CONFIG = [
     action: "sections",
     actionLabel: "Edit Sections",
   },
+  {
+    key: "syncMap",
+    label: "Create Sync Map",
+    description: "Map audio timestamps to bar numbers for real-time score following",
+    icon: "🔗",
+    action: "sync-map",
+    actionLabel: "Edit Sync Map",
+  },
 ];
 
 export default function ArrangementDetailPage() {
@@ -253,8 +261,9 @@ export default function ArrangementDetailPage() {
   const hasAudio = arrangement.audioAssets.length > 0;
   const hasAssignments = arrangement.parts.some((p) => p.assignments.length > 0);
   const hasSections = arrangement.sectionMarkers.length > 0;
+  const hasSyncMap = readiness?.checks.activeSyncMapPresent ?? false;
 
-  const stepStatus = [hasParts, hasCharts, hasAudio, hasAssignments, hasSections];
+  const stepStatus = [hasParts, hasCharts, hasAudio, hasAssignments, hasSections, hasSyncMap];
   const completedSteps = stepStatus.filter(Boolean).length;
   const totalSteps = stepStatus.length;
 
