@@ -17,6 +17,8 @@ import {
   Input,
   NativeSelect,
   Spinner,
+  Link,
+  Checkbox,
 } from "@chakra-ui/react";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -86,6 +88,7 @@ const STEP_CONFIG = [
     key: "charts",
     label: "Upload Charts",
     description: "Upload sheet music (PDF or MusicXML) for each part",
+    tip: { text: "Need transcriptions? Try klang.io", url: "https://klang.io" },
     icon: "📄",
     action: "upload-sheet-music",
     actionLabel: "Upload Sheet Music",
@@ -94,6 +97,7 @@ const STEP_CONFIG = [
     key: "audio",
     label: "Upload Audio",
     description: "Add a backing track, click, or stems",
+    tip: { text: "Need stem separation? Try moises.ai", url: "https://moises.ai" },
     icon: "🎧",
     action: "upload-audio",
     actionLabel: "Upload Audio",
@@ -205,6 +209,7 @@ export default function ArrangementDetailPage() {
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [assetRole, setAssetRole] = useState("full_mix");
   const [stemName, setStemName] = useState("");
+  const [copyrightAck, setCopyrightAck] = useState(false);
   const {
     isUploading: isUploadingAudio,
     progress: audioProgress,
@@ -222,6 +227,7 @@ export default function ArrangementDetailPage() {
         setAudioFile(null);
         setAssetRole("full_mix");
         setStemName("");
+        setCopyrightAck(false);
       },
     }
   );
@@ -351,6 +357,21 @@ export default function ArrangementDetailPage() {
                       </Text>
                       <Text fontSize="xs" color="gray.500">
                         {step.description}
+                        {"tip" in step && step.tip && (
+                          <>
+                            {" — "}
+                            <Link
+                              href={step.tip.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              color="blue.500"
+                              textDecoration="underline"
+                              _hover={{ color: "blue.600" }}
+                            >
+                              {step.tip.text}
+                            </Link>
+                          </>
+                        )}
                       </Text>
                     </Box>
                     <Button
@@ -652,7 +673,7 @@ export default function ArrangementDetailPage() {
       </Dialog.Root>
 
       {/* Upload Audio Modal */}
-      <Dialog.Root open={showUploadAudio} onOpenChange={(e) => setShowUploadAudio(e.open)}>
+      <Dialog.Root open={showUploadAudio} onOpenChange={(e) => { setShowUploadAudio(e.open); if (!e.open) setCopyrightAck(false); }}>
         <Dialog.Backdrop />
         <Dialog.Positioner>
           <Dialog.Content maxW="500px">
@@ -705,6 +726,23 @@ export default function ArrangementDetailPage() {
                       {audioUploadError}
                     </Text>
                   )}
+                  <Box bg="orange.50" border="1px solid" borderColor="orange.200" borderRadius="md" p={3}>
+                    <Text fontSize="xs" color="orange.800" mb={2}>
+                      By uploading audio, you confirm that you have the right to use this content
+                      for rehearsal purposes and that it does not infringe on any third-party
+                      copyrights, or that your use qualifies as fair use under applicable law.
+                    </Text>
+                    <Checkbox.Root
+                      checked={copyrightAck}
+                      onCheckedChange={(e) => setCopyrightAck(!!e.checked)}
+                    >
+                      <Checkbox.HiddenInput />
+                      <Checkbox.Control />
+                      <Checkbox.Label fontSize="xs" fontWeight="medium" color="orange.900">
+                        I acknowledge and agree
+                      </Checkbox.Label>
+                    </Checkbox.Root>
+                  </Box>
                 </VStack>
               </form>
             </Dialog.Body>
@@ -723,7 +761,7 @@ export default function ArrangementDetailPage() {
                   colorPalette="blue"
                   flex={1}
                   loading={isUploadingAudio || createAudioAsset.isPending}
-                  disabled={!audioFile}
+                  disabled={!audioFile || !copyrightAck}
                 >
                   Upload
                 </Button>
