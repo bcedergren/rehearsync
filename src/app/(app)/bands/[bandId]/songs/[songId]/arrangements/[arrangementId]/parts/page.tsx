@@ -38,9 +38,26 @@ export default function PartsPage() {
   );
 
   const [showAdd, setShowAdd] = useState(false);
-  const [instrumentName, setInstrumentName] = useState("");
-  const [partName, setPartName] = useState("");
-  const [isRequired, setIsRequired] = useState(true);
+
+  interface PartRow {
+    instrumentName: string;
+    partName: string;
+    isRequired: boolean;
+  }
+  const emptyRow = (): PartRow => ({ instrumentName: "", partName: "", isRequired: true });
+  const [partRows, setPartRows] = useState<PartRow[]>([emptyRow()]);
+
+  function updateRow(index: number, field: keyof PartRow, value: string | boolean) {
+    setPartRows((rows) =>
+      rows.map((r, i) => (i === index ? { ...r, [field]: value } : r))
+    );
+  }
+  function addRow() {
+    setPartRows((rows) => [...rows, emptyRow()]);
+  }
+  function removeRow(index: number) {
+    setPartRows((rows) => rows.filter((_, i) => i !== index));
+  }
 
   const [editingPart, setEditingPart] = useState<Part | null>(null);
   const [editInstrumentName, setEditInstrumentName] = useState("");
@@ -59,13 +76,24 @@ export default function PartsPage() {
     "POST",
     {
       invalidateKeys: [["parts", arrangementId]],
-      onSuccess: () => {
-        setShowAdd(false);
-        setInstrumentName("");
-        setPartName("");
-      },
     }
   );
+
+  async function handleAddParts(e: React.FormEvent) {
+    e.preventDefault();
+    const validRows = partRows.filter((r) => r.instrumentName.trim());
+    for (let i = 0; i < validRows.length; i++) {
+      const row = validRows[i];
+      await createPart.mutateAsync({
+        instrumentName: row.instrumentName.trim(),
+        partName: row.partName.trim() || undefined,
+        isRequired: row.isRequired,
+        displayOrder: (parts?.length ?? 0) + i + 1,
+      });
+    }
+    setShowAdd(false);
+    setPartRows([emptyRow()]);
+  }
 
   const updatePart = useApiMutation(
     editingPart ? `/arrangements/${arrangementId}/parts/${editingPart.id}` : "",
@@ -119,56 +147,75 @@ export default function PartsPage() {
         </Table.Root>
       )}
 
-      <Dialog.Root open={showAdd} onOpenChange={(e) => setShowAdd(e.open)}>
+      <Dialog.Root open={showAdd} onOpenChange={(e) => { if (!e.open) { setShowAdd(false); setPartRows([emptyRow()]); } }}>
         <Dialog.Backdrop />
         <Dialog.Positioner>
-          <Dialog.Content maxW="440px">
+          <Dialog.Content maxW="640px">
             <Dialog.Header>
-              <Dialog.Title>Add Part</Dialog.Title>
+              <Dialog.Title>Add Parts</Dialog.Title>
               <Dialog.CloseTrigger asChild>
                 <CloseButton size="sm" />
               </Dialog.CloseTrigger>
             </Dialog.Header>
             <Dialog.Body>
-              <form
-                id="add-part-form"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  createPart.mutate({
-                    instrumentName,
-                    partName: partName || undefined,
-                    isRequired,
-                    displayOrder: (parts?.length ?? 0) + 1,
-                  });
-                }}
-              >
-                <VStack gap={4}>
-                  <Field.Root>
-                    <Field.Label>Instrument</Field.Label>
-                    <Input
-                      value={instrumentName}
-                      onChange={(e) => setInstrumentName(e.target.value)}
-                      placeholder="e.g. Electric Guitar"
-                      required
-                      autoFocus
-                    />
-                  </Field.Root>
-                  <Field.Root>
-                    <Field.Label>Part Name (optional)</Field.Label>
-                    <Input
-                      value={partName}
-                      onChange={(e) => setPartName(e.target.value)}
-                      placeholder="e.g. Guitar 1"
-                    />
-                  </Field.Root>
-                  <Checkbox.Root
-                    checked={isRequired}
-                    onCheckedChange={(e) => setIsRequired(!!e.checked)}
+              <form id="add-part-form" onSubmit={handleAddParts}>
+                <VStack gap={3} align="stretch">
+                  {/* Column headers */}
+                  <Flex gap={2} px={1}>
+                    <Text fontSize="xs" fontWeight="semibold" color="gray.500" flex={2}>Instrument *</Text>
+                    <Text fontSize="xs" fontWeight="semibold" color="gray.500" flex={2}>Part Name</Text>
+                    <Text fontSize="xs" fontWeight="semibold" color="gray.500" w="70px" textAlign="center">Required</Text>
+                    <Box w="32px" />
+                  </Flex>
+                  {partRows.map((row, i) => (
+                    <Flex key={i} gap={2} align="center">
+                      <Input
+                        flex={2}
+                        size="sm"
+                        value={row.instrumentName}
+                        onChange={(e) => updateRow(i, "instrumentName", e.target.value)}
+                        placeholder="e.g. Electric Guitar"
+                        required
+                        autoFocus={i === 0}
+                      />
+                      <Input
+                        flex={2}
+                        size="sm"
+                        value={row.partName}
+                        onChange={(e) => updateRow(i, "partName", e.target.value)}
+                        placeholder="e.g. Guitar 1"
+                      />
+                      <Flex w="70px" justify="center">
+                        <Checkbox.Root
+                          checked={row.isRequired}
+                          onCheckedChange={(e) => updateRow(i, "isRequired", !!e.checked)}
+                        >
+                          <Checkbox.HiddenInput />
+                          <Checkbox.Control />
+                        </Checkbox.Root>
+                      </Flex>
+                      <Button
+                        size="xs"
+                        variant="ghost"
+                        colorPalette="red"
+                        w="32px"
+                        minW="32px"
+                        disabled={partRows.length === 1}
+                        onClick={() => removeRow(i)}
+                      >
+                        ✕
+                      </Button>
+                    </Flex>
+                  ))}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    colorPalette="blue"
+                    alignSelf="flex-start"
+                    onClick={addRow}
                   >
-                    <Checkbox.HiddenInput />
-                    <Checkbox.Control />
-                    <Checkbox.Label>Required part</Checkbox.Label>
-                  </Checkbox.Root>
+                    + Add another part
+                  </Button>
                 </VStack>
               </form>
             </Dialog.Body>
@@ -177,7 +224,7 @@ export default function PartsPage() {
                 <Button
                   variant="outline"
                   flex={1}
-                  onClick={() => setShowAdd(false)}
+                  onClick={() => { setShowAdd(false); setPartRows([emptyRow()]); }}
                 >
                   Cancel
                 </Button>
@@ -187,8 +234,9 @@ export default function PartsPage() {
                   colorPalette="blue"
                   flex={1}
                   loading={createPart.isPending}
+                  disabled={!partRows.some((r) => r.instrumentName.trim())}
                 >
-                  Add Part
+                  Add {partRows.filter((r) => r.instrumentName.trim()).length === 1 ? "Part" : `${partRows.filter((r) => r.instrumentName.trim()).length} Parts`}
                 </Button>
               </Flex>
             </Dialog.Footer>
