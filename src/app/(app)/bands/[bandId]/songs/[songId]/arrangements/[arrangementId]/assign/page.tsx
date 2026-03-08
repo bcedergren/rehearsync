@@ -8,7 +8,7 @@ import {
   Table,
   NativeSelect,
 } from "@chakra-ui/react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { useApiQuery, useApiMutation } from "@/hooks/useApi";
 
@@ -32,8 +32,11 @@ interface Assignment {
 
 export default function AssignPage() {
   const params = useParams();
+  const router = useRouter();
   const bandId = params.bandId as string;
+  const songId = params.songId as string;
   const arrangementId = params.arrangementId as string;
+  const basePath = `/bands/${bandId}/songs/${songId}/arrangements/${arrangementId}`;
 
   const { data: members } = useApiQuery<Member[]>(
     ["members", bandId],
@@ -74,6 +77,15 @@ export default function AssignPage() {
 
   return (
     <Box>
+      <Button
+        variant="ghost"
+        size="sm"
+        color="gray.500"
+        mb={2}
+        onClick={() => router.push(basePath)}
+      >
+        ← Back to arrangement
+      </Button>
       <Heading size="lg" mb={6}>
         Assign Parts
       </Heading>
