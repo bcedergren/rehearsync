@@ -11,6 +11,14 @@ import {
   VStack,
   Badge,
 } from "@chakra-ui/react";
+import {
+  Music,
+  Headphones,
+  Users,
+  GitBranch,
+  Bookmark,
+  Radio,
+} from "lucide-react";
 import Image from "next/image";
 import NextLink from "next/link";
 import { useState } from "react";
@@ -305,94 +313,82 @@ export default function HomePage() {
           <Box mb={16} />
 
           <SimpleGrid columns={{ base: 1, sm: 2, lg: 3, xl: 6 }} gap={5}>
-            <Card.Root bg="gray.900" color="white" overflow="hidden">
-              <Card.Body p={6}>
-                <Flex w="40px" h="40px" borderRadius="lg" bg="blue.900" align="center" justify="center" mb={4}>
-                  <Box w="10px" h="10px" borderRadius="sm" bg="blue.300" />
-                </Flex>
-                <Heading size="sm" mb={2}>Sheet Music</Heading>
-                <Text fontSize="sm" color="gray.400" lineHeight="1.7">
-                  Upload PDF and MusicXML charts per part. Draft, activate, retire — one source of truth on every music stand.
-                </Text>
-              </Card.Body>
-            </Card.Root>
-
-            <Card.Root bg="blue.600" color="white" overflow="hidden">
-              <Card.Body p={6}>
-                <Flex w="40px" h="40px" borderRadius="lg" bg="blue.700" align="center" justify="center" mb={4}>
-                  <Box w="10px" h="10px" borderRadius="sm" bg="blue.200" />
-                </Flex>
-                <Heading size="sm" mb={2}>Audio & Stems</Heading>
-                <Text fontSize="sm" color="blue.100" lineHeight="1.7">
-                  Full mixes, click tracks, individual stems. Every member pulls up exactly what they need to hear.
-                </Text>
-              </Card.Body>
-            </Card.Root>
-
-            <Card.Root borderWidth="1px" borderColor="gray.200" bg="white">
-              <Card.Body p={6}>
-                <Flex w="40px" h="40px" borderRadius="lg" bg="orange.50" align="center" justify="center" mb={4}>
-                  <Box w="10px" h="10px" borderRadius="sm" bg="orange.400" />
-                </Flex>
-                <Heading size="sm" mb={2} color="gray.900">Part Assignments</Heading>
-                <Text fontSize="sm" color="gray.500" lineHeight="1.7">
-                  Map each instrument to a band member. They open a song, they see their chart — not the whole stack.
-                </Text>
-              </Card.Body>
-            </Card.Root>
-
-            <Card.Root borderWidth="1px" borderColor="gray.200" bg="white">
-              <Card.Body p={6}>
-                <Flex w="40px" h="40px" borderRadius="lg" bg="green.50" align="center" justify="center" mb={4}>
-                  <Box w="10px" h="10px" borderRadius="sm" bg="green.400" />
-                </Flex>
-                <Heading size="sm" mb={2} color="gray.900">Arrangement Versioning</Heading>
-                <Text fontSize="sm" color="gray.500" lineHeight="1.7">
-                  Trying a new outro? Draft it without touching the published version. Archive the old one when you&apos;re sure.
-                </Text>
-              </Card.Body>
-            </Card.Root>
-
-            <Card.Root borderWidth="1px" borderColor="gray.200" bg="white">
-              <Card.Body p={6}>
-                <Flex w="40px" h="40px" borderRadius="lg" bg="purple.50" align="center" justify="center" mb={4}>
-                  <Box w="10px" h="10px" borderRadius="sm" bg="purple.400" />
-                </Flex>
-                <Heading size="sm" mb={2} color="gray.900">Section Markers</Heading>
-                <Text fontSize="sm" color="gray.500" lineHeight="1.7">
-                  Tag Intro, Verse, Chorus, Bridge — then jump to any section mid-rehearsal with one tap.
-                </Text>
-              </Card.Body>
-            </Card.Root>
-
-            <Card.Root bg="gray.50" borderWidth="1px" borderColor="gray.200" overflow="hidden">
-              <Card.Body p={6}>
-                <Flex w="40px" h="40px" borderRadius="lg" bg="blue.100" align="center" justify="center" mb={4}>
-                  <Box w="10px" h="10px" borderRadius="sm" bg="blue.500" />
-                </Flex>
-                <Flex align="center" gap={2} mb={2}>
-                  <Heading size="sm" color="gray.900">Live Session Sync</Heading>
-                </Flex>
-                <Text
-                  fontSize="xs"
-                  fontWeight="bold"
-                  bg="blue.100"
-                  color="blue.700"
-                  px={2}
-                  py={0.5}
-                  borderRadius="full"
-                  textTransform="uppercase"
-                  letterSpacing="wide"
-                  display="inline-block"
-                  mb={2}
-                >
-                  Band plan
-                </Text>
-                <Text fontSize="sm" color="gray.500" lineHeight="1.7">
-                  The leader hits play and every connected device follows along. Transport controls broadcast in real time.
-                </Text>
-              </Card.Body>
-            </Card.Root>
+            {[
+              {
+                icon: <Music size={24} />,
+                color: "blue",
+                title: "Sheet Music",
+                desc: "Upload PDF and MusicXML charts per part. Draft, activate, retire — one source of truth on every music stand.",
+              },
+              {
+                icon: <Headphones size={24} />,
+                color: "purple",
+                title: "Audio & Stems",
+                desc: "Full mixes, click tracks, individual stems. Every member pulls up exactly what they need to hear.",
+              },
+              {
+                icon: <Users size={24} />,
+                color: "orange",
+                title: "Part Assignments",
+                desc: "Map each instrument to a band member. They open a song, they see their chart — not the whole stack.",
+              },
+              {
+                icon: <GitBranch size={24} />,
+                color: "green",
+                title: "Arrangement Versioning",
+                desc: "Trying a new outro? Draft it without touching the published version. Archive the old one when you\u2019re sure.",
+              },
+              {
+                icon: <Bookmark size={24} />,
+                color: "pink",
+                title: "Section Markers",
+                desc: "Tag Intro, Verse, Chorus, Bridge — then jump to any section mid-rehearsal with one tap.",
+              },
+              {
+                icon: <Radio size={24} />,
+                color: "cyan",
+                title: "Live Session Sync",
+                desc: "The leader hits play and every connected device follows along. Transport controls broadcast in real time.",
+                badge: "Band plan",
+              },
+            ].map((feature) => (
+              <Card.Root key={feature.title} borderWidth="1px" borderColor="gray.200" bg="white">
+                <Card.Body p={6} display="flex" flexDirection="column" alignItems="center" textAlign="center">
+                  <Flex
+                    w="52px"
+                    h="52px"
+                    borderRadius="xl"
+                    bg={`${feature.color}.50`}
+                    color={`${feature.color}.500`}
+                    align="center"
+                    justify="center"
+                    mb={4}
+                  >
+                    {feature.icon}
+                  </Flex>
+                  <Heading size="sm" mb={2} color="gray.900">{feature.title}</Heading>
+                  {"badge" in feature && feature.badge && (
+                    <Text
+                      fontSize="xs"
+                      fontWeight="bold"
+                      bg="blue.50"
+                      color="blue.600"
+                      px={2}
+                      py={0.5}
+                      borderRadius="full"
+                      textTransform="uppercase"
+                      letterSpacing="wide"
+                      mb={2}
+                    >
+                      {feature.badge}
+                    </Text>
+                  )}
+                  <Text fontSize="sm" color="gray.500" lineHeight="1.7">
+                    {feature.desc}
+                  </Text>
+                </Card.Body>
+              </Card.Root>
+            ))}
           </SimpleGrid>
         </Box>
       </Box>
