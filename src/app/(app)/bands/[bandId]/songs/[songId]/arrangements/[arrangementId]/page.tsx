@@ -355,6 +355,7 @@ export default function ArrangementDetailPage() {
                     </Box>
                     <Button
                       size="sm"
+                      minW="160px"
                       variant={done ? "outline" : "solid"}
                       colorPalette={done ? "gray" : "blue"}
                       onClick={() => {
