@@ -17,19 +17,35 @@ export async function createAudioAsset(
 
   const nextVersion = (maxVersion._max.versionNum ?? 0) + 1;
 
-  return prisma.audioAsset.create({
-    data: {
-      arrangementId,
-      storageObjectId: data.storageObjectId,
-      assetRole: data.assetRole,
-      stemName: data.stemName,
-      channelMode: data.channelMode,
-      durationMs: data.durationMs,
-      sampleRateHz: data.sampleRateHz,
-      versionNum: nextVersion,
-      notes: data.notes,
-    },
-  });
+  // Retire any existing active asset for the same role+stem, then create the new one as active
+  const [, asset] = await prisma.$transaction([
+    prisma.audioAsset.updateMany({
+      where: {
+        arrangementId,
+        assetRole: data.assetRole,
+        stemName: data.stemName ?? null,
+        isActive: true,
+      },
+      data: { isActive: false, status: "retired" },
+    }),
+    prisma.audioAsset.create({
+      data: {
+        arrangementId,
+        storageObjectId: data.storageObjectId,
+        assetRole: data.assetRole,
+        stemName: data.stemName,
+        channelMode: data.channelMode,
+        durationMs: data.durationMs,
+        sampleRateHz: data.sampleRateHz,
+        versionNum: nextVersion,
+        isActive: true,
+        status: "active",
+        notes: data.notes,
+      },
+    }),
+  ]);
+
+  return asset;
 }
 
 export async function listAudioAssets(arrangementId: string) {

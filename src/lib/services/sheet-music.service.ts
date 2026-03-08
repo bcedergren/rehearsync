@@ -16,16 +16,31 @@ export async function createSheetMusicAsset(
 
   const nextVersion = (maxVersion._max.versionNum ?? 0) + 1;
 
-  return prisma.sheetMusicAsset.create({
-    data: {
-      arrangementId,
-      partId: data.partId,
-      storageObjectId: data.storageObjectId,
-      fileType: data.fileType,
-      versionNum: nextVersion,
-      notes: data.notes,
-    },
-  });
+  // Retire any existing active asset for the same part+fileType, then create the new one as active
+  const [, asset] = await prisma.$transaction([
+    prisma.sheetMusicAsset.updateMany({
+      where: {
+        partId: data.partId,
+        fileType: data.fileType,
+        isActive: true,
+      },
+      data: { isActive: false, status: "retired" },
+    }),
+    prisma.sheetMusicAsset.create({
+      data: {
+        arrangementId,
+        partId: data.partId,
+        storageObjectId: data.storageObjectId,
+        fileType: data.fileType,
+        versionNum: nextVersion,
+        isActive: true,
+        status: "active",
+        notes: data.notes,
+      },
+    }),
+  ]);
+
+  return asset;
 }
 
 export async function listSheetMusicAssets(arrangementId: string) {

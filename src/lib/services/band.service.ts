@@ -90,6 +90,13 @@ export async function updateMemberRole(memberId: string, role: string) {
   return prisma.member.update({ where: { id: memberId }, data: { role } });
 }
 
+export async function updateMember(
+  memberId: string,
+  data: { displayName?: string; role?: string; defaultInstrument?: string | null }
+) {
+  return prisma.member.update({ where: { id: memberId }, data });
+}
+
 export async function deactivateMember(memberId: string) {
   return prisma.member.update({ where: { id: memberId }, data: { isActive: false } });
 }
