@@ -7,6 +7,9 @@ import {
   Text,
   Table,
   NativeSelect,
+  Flex,
+  Badge,
+  Spinner,
 } from "@chakra-ui/react";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -56,23 +59,56 @@ export default function AssignPage() {
   const [selectedParts, setSelectedParts] = useState<Record<string, string>>(
     {}
   );
+  const [savedMembers, setSavedMembers] = useState<Record<string, boolean>>({});
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const assignMutation = useApiMutation(
     `/arrangements/${arrangementId}/assignments`,
     "POST",
-    { invalidateKeys: [["assignments", arrangementId]] }
+    {
+      invalidateKeys: [
+        ["assignments", arrangementId],
+        ["arrangement", arrangementId],
+      ],
+    }
   );
 
   function getAssignedPartId(memberId: string): string {
-    if (selectedParts[memberId]) return selectedParts[memberId];
+    if (selectedParts[memberId] !== undefined) return selectedParts[memberId];
     const existing = assignments?.find((a) => a.member.id === memberId);
     return existing?.part.id || "";
   }
 
-  function handleAssign(memberId: string) {
+  function hasChanged(memberId: string): boolean {
+    if (selectedParts[memberId] === undefined) return false;
+    const existing = assignments?.find((a) => a.member.id === memberId);
+    return selectedParts[memberId] !== (existing?.part.id || "");
+  }
+
+  async function handleAssign(memberId: string) {
     const partId = getAssignedPartId(memberId);
     if (!partId) return;
-    assignMutation.mutate({ memberId, partId });
+    setErrorMsg(null);
+    try {
+      await assignMutation.mutateAsync({ memberId, partId });
+      setSavedMembers((s) => ({ ...s, [memberId]: true }));
+      setSelectedParts((s) => {
+        const next = { ...s };
+        delete next[memberId];
+        return next;
+      });
+      setTimeout(() => setSavedMembers((s) => ({ ...s, [memberId]: false })), 2000);
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Failed to save assignment");
+    }
+  }
+
+  if (!members || !parts || !assignments) {
+    return (
+      <Flex justify="center" align="center" minH="40vh">
+        <Spinner size="lg" color="blue.500" />
+      </Flex>
+    );
   }
 
   return (
@@ -86,31 +122,45 @@ export default function AssignPage() {
       >
         ← Back to arrangement
       </Button>
-      <Heading size="lg" mb={6}>
+      <Heading size="lg" mb={2}>
         Assign Parts
       </Heading>
+      <Text fontSize="sm" color="gray.500" mb={6}>
+        Select a part for each member, then click Save.
+      </Text>
 
-      {members && parts && (
-        <Table.Root>
-          <Table.Header>
-            <Table.Row>
-              <Table.ColumnHeader>Member</Table.ColumnHeader>
-              <Table.ColumnHeader>Instrument</Table.ColumnHeader>
-              <Table.ColumnHeader>Assigned Part</Table.ColumnHeader>
-              <Table.ColumnHeader></Table.ColumnHeader>
-            </Table.Row>
-          </Table.Header>
-          <Table.Body>
-            {members.map((member) => (
+      {errorMsg && (
+        <Box bg="red.50" border="1px solid" borderColor="red.200" borderRadius="md" p={3} mb={4}>
+          <Text fontSize="sm" color="red.600">{errorMsg}</Text>
+        </Box>
+      )}
+
+      <Table.Root>
+        <Table.Header>
+          <Table.Row>
+            <Table.ColumnHeader>Member</Table.ColumnHeader>
+            <Table.ColumnHeader>Default Instrument</Table.ColumnHeader>
+            <Table.ColumnHeader>Assigned Part</Table.ColumnHeader>
+            <Table.ColumnHeader></Table.ColumnHeader>
+          </Table.Row>
+        </Table.Header>
+        <Table.Body>
+          {members.map((member) => {
+            const currentPartId = getAssignedPartId(member.id);
+            const changed = hasChanged(member.id);
+            const saved = savedMembers[member.id];
+            return (
               <Table.Row key={member.id}>
-                <Table.Cell>{member.displayName}</Table.Cell>
                 <Table.Cell>
-                  {member.defaultInstrument || "—"}
+                  <Text fontWeight="medium">{member.displayName}</Text>
+                </Table.Cell>
+                <Table.Cell>
+                  <Text color="gray.500">{member.defaultInstrument || "—"}</Text>
                 </Table.Cell>
                 <Table.Cell>
                   <NativeSelect.Root size="sm">
                     <NativeSelect.Field
-                      value={getAssignedPartId(member.id)}
+                      value={currentPartId}
                       onChange={(e) =>
                         setSelectedParts((s) => ({
                           ...s,
@@ -118,7 +168,7 @@ export default function AssignPage() {
                         }))
                       }
                     >
-                      <option value="">None</option>
+                      <option value="">— Select a part —</option>
                       {parts.map((p) => (
                         <option key={p.id} value={p.id}>
                           {p.instrumentName}
@@ -129,21 +179,27 @@ export default function AssignPage() {
                   </NativeSelect.Root>
                 </Table.Cell>
                 <Table.Cell>
-                  <Button
-                    size="xs"
-                    colorPalette="blue"
-                    onClick={() => handleAssign(member.id)}
-                    loading={assignMutation.isPending}
-                    disabled={!getAssignedPartId(member.id)}
-                  >
-                    Save
-                  </Button>
+                  <Flex align="center" gap={2}>
+                    {saved ? (
+                      <Badge colorPalette="green" variant="subtle">Saved</Badge>
+                    ) : (
+                      <Button
+                        size="xs"
+                        colorPalette="blue"
+                        onClick={() => handleAssign(member.id)}
+                        loading={assignMutation.isPending}
+                        disabled={!currentPartId || !changed}
+                      >
+                        Save
+                      </Button>
+                    )}
+                  </Flex>
                 </Table.Cell>
               </Table.Row>
-            ))}
-          </Table.Body>
-        </Table.Root>
-      )}
+            );
+          })}
+        </Table.Body>
+      </Table.Root>
     </Box>
   );
 }
