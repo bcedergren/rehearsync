@@ -302,166 +302,98 @@ export default function HomePage() {
           >
             Six things that actually matter in rehearsal
           </Heading>
-          <Text color="gray.500" fontSize="lg" maxW="520px" mx="auto" textAlign="center" mb={16}>
-            We didn&apos;t build a kitchen sink. Every feature solves a real problem
-            we&apos;ve hit in our own rehearsals.
-          </Text>
+          <Box mb={16} />
 
-          {/* Top row — 2 wide cards */}
-          <SimpleGrid columns={{ base: 1, md: 2 }} gap={6} mb={6}>
-            <Card.Root
-              bg="gray.900"
-              color="white"
-              overflow="hidden"
-            >
-              <Card.Body p={{ base: 6, md: 8 }}>
-                <Text fontSize="sm" fontWeight="bold" color="blue.300" mb={2} textTransform="uppercase" letterSpacing="wide">
-                  The foundation
-                </Text>
-                <Heading size="lg" mb={3}>Sheet Music</Heading>
-                <Text color="gray.400" lineHeight="1.8">
-                  Upload PDF and MusicXML charts per instrument part. Keep multiple
-                  versions — draft it, activate it, retire the old one. One source of
-                  truth on every music stand, every time.
+          <SimpleGrid columns={{ base: 1, sm: 2, lg: 3, xl: 6 }} gap={5}>
+            <Card.Root bg="gray.900" color="white" overflow="hidden">
+              <Card.Body p={6}>
+                <Flex w="40px" h="40px" borderRadius="lg" bg="blue.900" align="center" justify="center" mb={4}>
+                  <Box w="10px" h="10px" borderRadius="sm" bg="blue.300" />
+                </Flex>
+                <Heading size="sm" mb={2}>Sheet Music</Heading>
+                <Text fontSize="sm" color="gray.400" lineHeight="1.7">
+                  Upload PDF and MusicXML charts per part. Draft, activate, retire — one source of truth on every music stand.
                 </Text>
               </Card.Body>
             </Card.Root>
 
-            <Card.Root
-              bg="blue.600"
-              color="white"
-              overflow="hidden"
-            >
-              <Card.Body p={{ base: 6, md: 8 }}>
-                <Text fontSize="sm" fontWeight="bold" color="blue.200" mb={2} textTransform="uppercase" letterSpacing="wide">
-                  The sound
-                </Text>
-                <Heading size="lg" mb={3}>Audio & Stems</Heading>
-                <Text color="blue.100" lineHeight="1.8">
-                  Full mixes, click tracks, individual stems — upload them all.
-                  Assign tracks to arrangements so every member pulls up exactly
-                  what they need to hear. No more &ldquo;who has the click?&rdquo;
+            <Card.Root bg="blue.600" color="white" overflow="hidden">
+              <Card.Body p={6}>
+                <Flex w="40px" h="40px" borderRadius="lg" bg="blue.700" align="center" justify="center" mb={4}>
+                  <Box w="10px" h="10px" borderRadius="sm" bg="blue.200" />
+                </Flex>
+                <Heading size="sm" mb={2}>Audio & Stems</Heading>
+                <Text fontSize="sm" color="blue.100" lineHeight="1.7">
+                  Full mixes, click tracks, individual stems. Every member pulls up exactly what they need to hear.
                 </Text>
               </Card.Body>
             </Card.Root>
-          </SimpleGrid>
 
-          {/* Middle row — 3 cards */}
-          <SimpleGrid columns={{ base: 1, md: 3 }} gap={6} mb={6}>
             <Card.Root borderWidth="1px" borderColor="gray.200" bg="white">
-              <Card.Body p={{ base: 6, md: 7 }}>
-                <Flex
-                  w="40px"
-                  h="40px"
-                  borderRadius="lg"
-                  bg="orange.50"
-                  align="center"
-                  justify="center"
-                  mb={4}
-                >
+              <Card.Body p={6}>
+                <Flex w="40px" h="40px" borderRadius="lg" bg="orange.50" align="center" justify="center" mb={4}>
                   <Box w="10px" h="10px" borderRadius="sm" bg="orange.400" />
                 </Flex>
                 <Heading size="sm" mb={2} color="gray.900">Part Assignments</Heading>
                 <Text fontSize="sm" color="gray.500" lineHeight="1.7">
-                  Map each instrument to a band member. When they open a song,
-                  they see their chart — not the whole stack.
+                  Map each instrument to a band member. They open a song, they see their chart — not the whole stack.
                 </Text>
               </Card.Body>
             </Card.Root>
 
             <Card.Root borderWidth="1px" borderColor="gray.200" bg="white">
-              <Card.Body p={{ base: 6, md: 7 }}>
-                <Flex
-                  w="40px"
-                  h="40px"
-                  borderRadius="lg"
-                  bg="green.50"
-                  align="center"
-                  justify="center"
-                  mb={4}
-                >
+              <Card.Body p={6}>
+                <Flex w="40px" h="40px" borderRadius="lg" bg="green.50" align="center" justify="center" mb={4}>
                   <Box w="10px" h="10px" borderRadius="sm" bg="green.400" />
                 </Flex>
                 <Heading size="sm" mb={2} color="gray.900">Arrangement Versioning</Heading>
                 <Text fontSize="sm" color="gray.500" lineHeight="1.7">
-                  Trying a new outro? Draft it without touching the published
-                  version. Archive the old one when you&apos;re sure.
+                  Trying a new outro? Draft it without touching the published version. Archive the old one when you&apos;re sure.
                 </Text>
               </Card.Body>
             </Card.Root>
 
             <Card.Root borderWidth="1px" borderColor="gray.200" bg="white">
-              <Card.Body p={{ base: 6, md: 7 }}>
-                <Flex
-                  w="40px"
-                  h="40px"
-                  borderRadius="lg"
-                  bg="purple.50"
-                  align="center"
-                  justify="center"
-                  mb={4}
-                >
+              <Card.Body p={6}>
+                <Flex w="40px" h="40px" borderRadius="lg" bg="purple.50" align="center" justify="center" mb={4}>
                   <Box w="10px" h="10px" borderRadius="sm" bg="purple.400" />
                 </Flex>
                 <Heading size="sm" mb={2} color="gray.900">Section Markers</Heading>
                 <Text fontSize="sm" color="gray.500" lineHeight="1.7">
-                  Tag Intro, Verse, Chorus, Bridge — then jump to any
-                  section mid-rehearsal with one tap.
+                  Tag Intro, Verse, Chorus, Bridge — then jump to any section mid-rehearsal with one tap.
+                </Text>
+              </Card.Body>
+            </Card.Root>
+
+            <Card.Root bg="gray.50" borderWidth="1px" borderColor="gray.200" overflow="hidden">
+              <Card.Body p={6}>
+                <Flex w="40px" h="40px" borderRadius="lg" bg="blue.100" align="center" justify="center" mb={4}>
+                  <Box w="10px" h="10px" borderRadius="sm" bg="blue.500" />
+                </Flex>
+                <Flex align="center" gap={2} mb={2}>
+                  <Heading size="sm" color="gray.900">Live Session Sync</Heading>
+                </Flex>
+                <Text
+                  fontSize="xs"
+                  fontWeight="bold"
+                  bg="blue.100"
+                  color="blue.700"
+                  px={2}
+                  py={0.5}
+                  borderRadius="full"
+                  textTransform="uppercase"
+                  letterSpacing="wide"
+                  display="inline-block"
+                  mb={2}
+                >
+                  Band plan
+                </Text>
+                <Text fontSize="sm" color="gray.500" lineHeight="1.7">
+                  The leader hits play and every connected device follows along. Transport controls broadcast in real time.
                 </Text>
               </Card.Body>
             </Card.Root>
           </SimpleGrid>
-
-          {/* Bottom — full-width accent card */}
-          <Card.Root
-            bg="gray.50"
-            borderWidth="1px"
-            borderColor="gray.200"
-            overflow="hidden"
-          >
-            <Card.Body p={{ base: 6, md: 8 }}>
-              <Flex
-                direction={{ base: "column", md: "row" }}
-                align={{ base: "start", md: "center" }}
-                gap={{ base: 4, md: 8 }}
-              >
-                <Flex
-                  w="56px"
-                  h="56px"
-                  borderRadius="xl"
-                  bg="blue.500"
-                  align="center"
-                  justify="center"
-                  flexShrink={0}
-                >
-                  <Box w="20px" h="20px" borderRadius="md" bg="white" />
-                </Flex>
-                <Box flex={1}>
-                  <Flex align="center" gap={3} mb={2}>
-                    <Heading size="md" color="gray.900">Live Session Sync</Heading>
-                    <Text
-                      fontSize="xs"
-                      fontWeight="bold"
-                      bg="blue.100"
-                      color="blue.700"
-                      px={2}
-                      py={0.5}
-                      borderRadius="full"
-                      textTransform="uppercase"
-                      letterSpacing="wide"
-                    >
-                      Agent plan
-                    </Text>
-                  </Flex>
-                  <Text fontSize="md" color="gray.500" lineHeight="1.8" maxW="680px">
-                    The leader hits play and every connected device follows along.
-                    Pause, seek, jump to the chorus — transport controls broadcast
-                    to every musician&apos;s screen in real time. No more counting people in.
-                  </Text>
-                </Box>
-              </Flex>
-            </Card.Body>
-          </Card.Root>
         </Box>
       </Box>
 
