@@ -72,11 +72,10 @@ export function PlanSwitcher() {
           {currentTier}
         </Badge>
       </Flex>
-      <NativeSelect.Root size="sm">
+      <NativeSelect.Root size="sm" disabled={switching}>
         <NativeSelect.Field
           value={currentTier}
           onChange={(e) => handleChange(e.target.value)}
-          disabled={switching}
         >
           <option value="free">Free</option>
           <option value="band">Band</option>
