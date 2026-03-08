@@ -25,31 +25,65 @@ export function useUpload() {
     ): Promise<string | null> => {
       setState({
         isUploading: true,
-        progress: 10,
+        progress: 5,
         error: null,
         storageObjectId: null,
       });
 
       try {
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("bandId", bandId);
-        formData.append("kind", kind);
-
-        setState((s) => ({ ...s, progress: 30 }));
-
-        const res = await fetch("/api/v1/uploads", {
+        // Step 1: Get a signed upload URL from our API
+        setState((s) => ({ ...s, progress: 10 }));
+        const signedRes = await fetch("/api/v1/uploads/signed-url", {
           method: "POST",
-          body: formData,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            bandId,
+            kind,
+            fileName: file.name,
+            mimeType: file.type,
+            fileSize: file.size,
+          }),
         });
 
-        const json = await res.json();
-
-        if (!res.ok) {
-          throw new Error(json.error?.message || "Upload failed");
+        const signedJson = await signedRes.json();
+        if (!signedRes.ok) {
+          throw new Error(signedJson.error?.message || "Failed to get upload URL");
         }
 
-        const storageObjectId = json.data.storageObjectId as string;
+        const { signedUrl, token, storageObjectId } = signedJson.data;
+
+        // Step 2: Upload directly to Supabase Storage using XMLHttpRequest for progress
+        setState((s) => ({ ...s, progress: 20 }));
+
+        await new Promise<void>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+
+          xhr.upload.addEventListener("progress", (e) => {
+            if (e.lengthComputable) {
+              const pct = Math.round(20 + (e.loaded / e.total) * 70);
+              setState((s) => ({ ...s, progress: pct }));
+            }
+          });
+
+          xhr.addEventListener("load", () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              resolve();
+            } else {
+              reject(new Error(`Upload failed with status ${xhr.status}`));
+            }
+          });
+
+          xhr.addEventListener("error", () => reject(new Error("Upload failed")));
+          xhr.addEventListener("abort", () => reject(new Error("Upload cancelled")));
+
+          xhr.open("PUT", signedUrl);
+          xhr.setRequestHeader("Content-Type", file.type);
+          xhr.setRequestHeader("x-upsert", "false");
+          if (token) {
+            xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+          }
+          xhr.send(file);
+        });
 
         setState({
           isUploading: false,
