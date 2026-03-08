@@ -349,7 +349,6 @@ export default function HomePage() {
                 color: "cyan",
                 title: "Live Session Sync",
                 desc: "The leader hits play and every connected device follows along. Transport controls broadcast in real time.",
-                badge: "Band plan",
               },
             ].map((feature) => (
               <Card.Root key={feature.title} borderWidth="1px" borderColor="gray.200" bg="white">
@@ -367,22 +366,6 @@ export default function HomePage() {
                     {feature.icon}
                   </Flex>
                   <Heading size="sm" mb={2} color="gray.900">{feature.title}</Heading>
-                  {"badge" in feature && feature.badge && (
-                    <Text
-                      fontSize="xs"
-                      fontWeight="bold"
-                      bg="blue.50"
-                      color="blue.600"
-                      px={2}
-                      py={0.5}
-                      borderRadius="full"
-                      textTransform="uppercase"
-                      letterSpacing="wide"
-                      mb={2}
-                    >
-                      {feature.badge}
-                    </Text>
-                  )}
                   <Text fontSize="sm" color="gray.500" lineHeight="1.7">
                     {feature.desc}
                   </Text>

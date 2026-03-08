@@ -21,6 +21,7 @@ export default function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -28,6 +29,12 @@ export default function RegisterPage() {
     e.preventDefault();
     setLoading(true);
     setError("");
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      setLoading(false);
+      return;
+    }
 
     const res = await fetch("/api/v1/auth/register", {
       method: "POST",
@@ -216,6 +223,24 @@ export default function RegisterPage() {
                   _focus={{ borderColor: "blue.400", boxShadow: "0 0 0 1px var(--chakra-colors-blue-400)" }}
                   size="lg"
                   placeholder="Min 8 characters"
+                />
+              </Field.Root>
+              <Field.Root>
+                <Field.Label color="gray.300" fontSize="sm">Confirm Password</Field.Label>
+                <Input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  minLength={8}
+                  bg="gray.800"
+                  border="1px solid"
+                  borderColor="gray.700"
+                  color="white"
+                  _hover={{ borderColor: "gray.600" }}
+                  _focus={{ borderColor: "blue.400", boxShadow: "0 0 0 1px var(--chakra-colors-blue-400)" }}
+                  size="lg"
+                  placeholder="Re-enter your password"
                 />
               </Field.Root>
               {error && (
