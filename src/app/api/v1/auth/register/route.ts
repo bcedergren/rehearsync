@@ -36,8 +36,9 @@ export async function POST(req: NextRequest) {
     });
 
     return response.created(user);
-  } catch (err) {
-    console.error("Registration error:", err);
-    return response.error("internal_error", "Registration failed", 500);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("Registration error:", message);
+    return response.error("internal_error", `Registration failed: ${message}`, 500);
   }
 }
