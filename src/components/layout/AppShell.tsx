@@ -3,6 +3,7 @@
 import { Flex, Box } from "@chakra-ui/react";
 import { Sidebar } from "./Sidebar";
 import { Navbar } from "./Navbar";
+import { PlanSwitcher } from "@/components/admin/PlanSwitcher";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
@@ -14,6 +15,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {children}
         </Box>
       </Box>
+      <PlanSwitcher />
     </Flex>
   );
 }
