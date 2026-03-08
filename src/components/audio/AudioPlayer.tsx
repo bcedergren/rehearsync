@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useEffect, useCallback } from "react";
+import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import {
   Box,
   Flex,
@@ -10,10 +10,11 @@ import {
   VStack,
   Slider,
 } from "@chakra-ui/react";
+import { useSignedUrls } from "@/hooks/useSignedUrl";
 
 interface AudioTrack {
   id: string;
-  url: string;
+  url: string; // objectKey (not a direct URL)
   label: string;
   role: string;
 }
@@ -46,6 +47,10 @@ export function AudioPlayer({
 }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
+
+  // Resolve signed URLs for all tracks
+  const objectKeys = useMemo(() => tracks.map((t) => t.url), [tracks]);
+  const signedUrls = useSignedUrls(objectKeys);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -180,8 +185,8 @@ export function AudioPlayer({
   return (
     <Box w="full">
       {/* Hidden audio element */}
-      {activeTrack && (
-        <audio ref={audioRef} src={activeTrack.url} preload="metadata" />
+      {activeTrack && signedUrls[activeTrack.url] && (
+        <audio ref={audioRef} src={signedUrls[activeTrack.url]!} preload="metadata" />
       )}
 
       {/* Track selector */}

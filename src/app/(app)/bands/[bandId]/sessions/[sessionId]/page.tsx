@@ -210,7 +210,7 @@ export default function SessionControlPage() {
                 .filter((a) => a.storageObject?.objectKey)
                 .map((a) => ({
                   id: a.id,
-                  url: `/api/v1/files/${a.storageObject.objectKey}`,
+                  url: a.storageObject.objectKey,
                   label: a.stemName || a.assetRole.replace("_", " "),
                   role: a.assetRole,
                 }))}

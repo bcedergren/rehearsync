@@ -18,6 +18,7 @@ import {
 import { useParams, useRouter } from "next/navigation";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useApiQuery, useApiMutation } from "@/hooks/useApi";
+import { useSignedUrl } from "@/hooks/useSignedUrl";
 
 interface AudioAsset {
   id: string;
@@ -235,6 +236,7 @@ export default function SyncMapEditorPage() {
   }
 
   const activeAsset = arrangement.audioAssets.find((a) => a.id === selectedAssetId);
+  const audioSignedUrl = useSignedUrl(activeAsset?.storageObject.objectKey || null);
   const activeMap = syncMaps?.find((m) => m.isActive);
   const allPoints = [
     ...(syncMapDetail?.points || []),
@@ -317,11 +319,11 @@ export default function SyncMapEditorPage() {
               </Flex>
 
               {/* Audio Player */}
-              {activeAsset && (
+              {activeAsset && audioSignedUrl && (
                 <>
                   <audio
                     ref={audioRef}
-                    src={`/api/v1/files/${activeAsset.storageObject.objectKey}`}
+                    src={audioSignedUrl}
                     preload="metadata"
                   />
                   <Flex align="center" gap={3} mb={2}>
