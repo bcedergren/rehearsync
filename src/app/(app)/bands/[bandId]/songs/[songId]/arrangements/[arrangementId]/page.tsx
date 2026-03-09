@@ -618,7 +618,7 @@ export default function ArrangementDetailPage() {
   }
 
   return (
-    <Box maxW="1100px">
+    <Box maxW="1400px">
       {/* Header */}
       <Box mb={6}>
         <Button
@@ -784,9 +784,9 @@ export default function ArrangementDetailPage() {
         </Box>
       )}
 
-      {/* Main Content - Two Column Layout */}
-      <SimpleGrid columns={{ base: 1, lg: 2 }} gap={6}>
-        {/* Left Column: Parts & Assignments */}
+      {/* Main Content - Three Column Layout */}
+      <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} gap={6}>
+        {/* Parts & Assignments */}
         <Card.Root bg="white" borderWidth="1px" borderColor="gray.100">
           <Card.Body p={5}>
             <Flex justify="space-between" align="center" mb={4}>
@@ -881,10 +881,8 @@ export default function ArrangementDetailPage() {
           </Card.Body>
         </Card.Root>
 
-        {/* Right Column */}
-        <VStack align="stretch" gap={6}>
-          {/* Audio Tracks */}
-          <Card.Root bg="white" borderWidth="1px" borderColor="gray.100">
+        {/* Audio Tracks */}
+        <Card.Root bg="white" borderWidth="1px" borderColor="gray.100">
             <Card.Body p={5}>
               <Flex justify="space-between" align="center" mb={4}>
                 <Flex align="center" gap={2}>
@@ -991,7 +989,6 @@ export default function ArrangementDetailPage() {
               )}
             </Card.Body>
           </Card.Root>
-        </VStack>
       </SimpleGrid>
 
       {/* Upload Sheet Music Modal */}
