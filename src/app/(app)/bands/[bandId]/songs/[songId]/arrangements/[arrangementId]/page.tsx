@@ -606,9 +606,10 @@ export default function ArrangementDetailPage() {
             <Button
               size="xs"
               colorPalette="purple"
-              onClick={() => {
-                for (const stem of stemsForTranscription) {
-                  startTranscription(stem.id, "transcription");
+              onClick={async () => {
+                for (let i = 0; i < stemsForTranscription.length; i++) {
+                  if (i > 0) await new Promise((r) => setTimeout(r, 12000));
+                  await startTranscription(stemsForTranscription[i].id, "transcription");
                 }
               }}
             >
