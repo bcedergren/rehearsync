@@ -223,27 +223,362 @@ async function handleStemSeparation(
   return createdStems;
 }
 
-// ─── Transcription Handler (Basic Pitch → MIDI) ────────────────
-
-async function handleTranscription(
-  job: Record<string, unknown>,
-  output: Record<string, unknown>
-) {
-  // Basic Pitch returns MIDI file URL
-  // For now, store the output payload for later processing
-  // Phase 3 will add MIDI → MusicXML conversion via OpenAI
-  return { midiOutput: output };
-}
-
 // ─── Beat Detection Handler ─────────────────────────────────────
 
 async function handleBeatDetection(
   job: Record<string, unknown>,
   output: Record<string, unknown>
 ) {
-  // Basic Pitch returns note onsets and timing info
-  // Phase 4 will parse this into SyncMap + SyncMapPoints
-  return { beatOutput: output };
+  const arrangementId = job.arrangement_id as string;
+  const audioAssetId = job.audio_asset_id as string;
+
+  // Basic Pitch returns note_events (with onset times) and midi_file
+  // We use note onsets to estimate bar boundaries
+  const noteEvents = output.note_events as number[][] | undefined;
+
+  if (!noteEvents || noteEvents.length === 0) {
+    throw new Error("No note events returned from basic-pitch");
+  }
+
+  // Extract onset times (first element of each event array)
+  // Basic Pitch note_events format: [start_time_s, end_time_s, pitch, velocity, [optional]]
+  const onsetTimesMs = noteEvents
+    .map((event) => Math.round(event[0] * 1000))
+    .sort((a, b) => a - b);
+
+  // Estimate tempo from onset intervals
+  const intervals: number[] = [];
+  for (let i = 1; i < Math.min(onsetTimesMs.length, 200); i++) {
+    const diff = onsetTimesMs[i] - onsetTimesMs[i - 1];
+    if (diff > 50 && diff < 2000) {
+      intervals.push(diff);
+    }
+  }
+
+  // Find the most common interval cluster (likely the beat)
+  intervals.sort((a, b) => a - b);
+  const medianInterval = intervals[Math.floor(intervals.length / 2)] || 500;
+
+  // Estimate beat duration — cluster around the median
+  const nearMedian = intervals.filter(
+    (i) => Math.abs(i - medianInterval) < medianInterval * 0.3
+  );
+  const avgBeatMs =
+    nearMedian.length > 0
+      ? Math.round(nearMedian.reduce((a, b) => a + b, 0) / nearMedian.length)
+      : medianInterval;
+
+  // Assume 4/4 time — bar = 4 beats
+  const barDurationMs = avgBeatMs * 4;
+  const estimatedBpm = Math.round(60000 / avgBeatMs);
+
+  // Determine song duration from last note event
+  const lastOnsetMs = onsetTimesMs[onsetTimesMs.length - 1];
+  const totalBars = Math.ceil(lastOnsetMs / barDurationMs);
+
+  // Get next version number for sync maps on this audio asset
+  const { data: existingMaps } = await supabase
+    .from("sync_maps")
+    .select("version_num")
+    .eq("audio_asset_id", audioAssetId)
+    .order("version_num", { ascending: false })
+    .limit(1);
+
+  const nextVersion = ((existingMaps?.[0]?.version_num as number) ?? 0) + 1;
+
+  // Retire existing active sync maps for this audio
+  await supabase
+    .from("sync_maps")
+    .update({ is_active: false, status: "retired" })
+    .eq("audio_asset_id", audioAssetId)
+    .eq("is_active", true);
+
+  // Create the sync map
+  const { data: syncMap, error: syncMapError } = await supabase
+    .from("sync_maps")
+    .insert({
+      arrangement_id: arrangementId,
+      audio_asset_id: audioAssetId,
+      source_type: "generated",
+      version_num: nextVersion,
+      is_active: true,
+      status: "active",
+    })
+    .select("id")
+    .single();
+
+  if (syncMapError) {
+    throw new Error(`Failed to create sync map: ${syncMapError.message}`);
+  }
+
+  // Create sync map points — one per bar boundary
+  const points = [];
+  for (let bar = 1; bar <= totalBars; bar++) {
+    const timeMs = (bar - 1) * barDurationMs;
+    points.push({
+      sync_map_id: syncMap.id,
+      time_ms: timeMs,
+      bar_number: bar,
+      beat_number: 1,
+      tick_offset: 0,
+    });
+  }
+
+  // Insert in batches of 100
+  for (let i = 0; i < points.length; i += 100) {
+    const batch = points.slice(i, i + 100);
+    const { error: pointsError } = await supabase
+      .from("sync_map_points")
+      .insert(batch);
+    if (pointsError) {
+      throw new Error(`Failed to create sync map points: ${pointsError.message}`);
+    }
+  }
+
+  return {
+    syncMapId: syncMap.id,
+    estimatedBpm,
+    totalBars,
+    barDurationMs,
+    pointsCreated: points.length,
+  };
+}
+
+// ─── Transcription Handler (Basic Pitch → MIDI → MusicXML) ─────
+
+const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+
+async function handleTranscription(
+  job: Record<string, unknown>,
+  output: Record<string, unknown>
+) {
+  const arrangementId = job.arrangement_id as string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const bandId = (job as any).arrangements?.songs?.band_id;
+
+  if (!bandId) {
+    throw new Error("Could not determine bandId from job");
+  }
+
+  // Basic Pitch returns midi_file URL and note_events
+  const midiFileUrl = output.midi_file as string | undefined;
+  const noteEvents = output.note_events as number[][] | undefined;
+
+  if (!noteEvents || noteEvents.length === 0) {
+    throw new Error("No note events returned from basic-pitch");
+  }
+
+  // Download MIDI file for storage
+  let midiData: ArrayBuffer | null = null;
+  if (midiFileUrl) {
+    const midiResponse = await fetch(midiFileUrl);
+    if (midiResponse.ok) {
+      midiData = await midiResponse.arrayBuffer();
+    }
+  }
+
+  // Format note events for OpenAI
+  // note_events: [start_time_s, end_time_s, midi_pitch, velocity]
+  const notesSummary = noteEvents
+    .slice(0, 500) // Limit to first 500 notes to stay within token limits
+    .map((e) => ({
+      start: Math.round(e[0] * 1000) / 1000,
+      end: Math.round(e[1] * 1000) / 1000,
+      pitch: Math.round(e[2]),
+      velocity: Math.round(e[3] * 127),
+    }));
+
+  if (!OPENAI_API_KEY) {
+    // Store MIDI data but skip MusicXML generation
+    const result: Record<string, unknown> = {
+      noteEventsCount: noteEvents.length,
+      skippedMusicXml: true,
+      reason: "OPENAI_API_KEY not configured",
+    };
+
+    // Still upload MIDI if available
+    if (midiData) {
+      const midiId = crypto.randomUUID();
+      const midiKey = `bands/${bandId}/midi/${midiId}.mid`;
+      await supabase.storage
+        .from(STORAGE_BUCKET)
+        .upload(midiKey, midiData, { contentType: "audio/midi", upsert: false });
+      result.midiStorageKey = midiKey;
+    }
+
+    return result;
+  }
+
+  // Call OpenAI to convert note data to MusicXML
+  const openaiResponse = await fetch(
+    "https://api.openai.com/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: `You are a music transcription expert. Convert MIDI note data into valid MusicXML format.
+Rules:
+- Infer time signature and key signature from the note patterns
+- Quantize notes to the nearest readable rhythmic value (eighth notes minimum)
+- Use standard MusicXML 4.0 format
+- Include proper measure divisions, clef, and note durations
+- Output ONLY the MusicXML content, no explanations or markdown
+- The output must be a complete, valid MusicXML document`,
+          },
+          {
+            role: "user",
+            content: `Convert these detected notes to MusicXML. Notes are objects with start (seconds), end (seconds), pitch (MIDI number 0-127), and velocity (0-127):\n\n${JSON.stringify(notesSummary)}`,
+          },
+        ],
+        temperature: 0.2,
+        max_tokens: 16000,
+      }),
+    }
+  );
+
+  if (!openaiResponse.ok) {
+    const errText = await openaiResponse.text();
+    throw new Error(`OpenAI API error: ${openaiResponse.status} ${errText}`);
+  }
+
+  const openaiResult = await openaiResponse.json();
+  const musicXmlContent =
+    openaiResult.choices?.[0]?.message?.content?.trim() ?? "";
+
+  if (!musicXmlContent || !musicXmlContent.includes("<?xml")) {
+    throw new Error("OpenAI did not return valid MusicXML content");
+  }
+
+  // Upload MusicXML to Supabase Storage
+  const xmlId = crypto.randomUUID();
+  const xmlKey = `bands/${bandId}/sheets/${xmlId}.musicxml`;
+  const xmlBytes = new TextEncoder().encode(musicXmlContent);
+
+  const { error: xmlUploadError } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(xmlKey, xmlBytes, {
+      contentType: "application/vnd.recordare.musicxml+xml",
+      upsert: false,
+    });
+
+  if (xmlUploadError) {
+    throw new Error(`Failed to upload MusicXML: ${xmlUploadError.message}`);
+  }
+
+  // Create StorageObject for MusicXML
+  const xmlStorageObjectId = await createStorageObject(
+    STORAGE_BUCKET,
+    xmlKey,
+    "transcription.musicxml",
+    "application/vnd.recordare.musicxml+xml",
+    xmlBytes.byteLength
+  );
+
+  // Find the Part linked to this stem's audio asset (if any)
+  // Look for a Part whose instrument matches the stem name
+  const audioAssetId = job.audio_asset_id as string;
+  const { data: audioAsset } = await supabase
+    .from("audio_assets")
+    .select("stem_name")
+    .eq("id", audioAssetId)
+    .single();
+
+  let partId: string | null = null;
+
+  if (audioAsset?.stem_name) {
+    // Try to find a part that matches the stem name
+    const { data: matchingPart } = await supabase
+      .from("parts")
+      .select("id")
+      .eq("arrangement_id", arrangementId)
+      .ilike("instrument_name", `%${audioAsset.stem_name}%`)
+      .limit(1)
+      .single();
+
+    partId = matchingPart?.id ?? null;
+  }
+
+  // If no matching part found, try to find any part for this arrangement
+  if (!partId) {
+    const { data: anyPart } = await supabase
+      .from("parts")
+      .select("id")
+      .eq("arrangement_id", arrangementId)
+      .order("display_order", { ascending: true })
+      .limit(1)
+      .single();
+
+    partId = anyPart?.id ?? null;
+  }
+
+  const result: Record<string, unknown> = {
+    musicXmlStorageObjectId: xmlStorageObjectId,
+    noteEventsCount: noteEvents.length,
+  };
+
+  // Create SheetMusicAsset if we found a matching part
+  if (partId) {
+    // Get next version
+    const { data: existingSheets } = await supabase
+      .from("sheet_music_assets")
+      .select("version_num")
+      .eq("part_id", partId)
+      .eq("file_type", "musicxml")
+      .order("version_num", { ascending: false })
+      .limit(1);
+
+    const nextVersion =
+      ((existingSheets?.[0]?.version_num as number) ?? 0) + 1;
+
+    // Retire existing active musicxml for this part
+    await supabase
+      .from("sheet_music_assets")
+      .update({ is_active: false, status: "retired" })
+      .eq("part_id", partId)
+      .eq("file_type", "musicxml")
+      .eq("is_active", true);
+
+    const { data: sheetAsset, error: sheetError } = await supabase
+      .from("sheet_music_assets")
+      .insert({
+        arrangement_id: arrangementId,
+        part_id: partId,
+        storage_object_id: xmlStorageObjectId,
+        file_type: "musicxml",
+        version_num: nextVersion,
+        is_active: true,
+        status: "active",
+        notes: "AI-generated from audio transcription",
+      })
+      .select("id")
+      .single();
+
+    if (sheetError) {
+      console.error("Failed to create sheet music asset:", sheetError);
+    } else {
+      result.sheetMusicAssetId = sheetAsset.id;
+      result.partId = partId;
+    }
+  }
+
+  // Also upload MIDI file if available
+  if (midiData) {
+    const midiId = crypto.randomUUID();
+    const midiKey = `bands/${bandId}/midi/${midiId}.mid`;
+    await supabase.storage
+      .from(STORAGE_BUCKET)
+      .upload(midiKey, midiData, { contentType: "audio/midi", upsert: false });
+    result.midiStorageKey = midiKey;
+  }
+
+  return result;
 }
 
 // ─── Main Handler ───────────────────────────────────────────────

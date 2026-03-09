@@ -259,6 +259,18 @@ export default function ArrangementDetailPage() {
     startJob: startStemSeparation,
   } = useProcessingJob(handleProcessingComplete);
 
+  const {
+    isProcessing: isBeatProcessing,
+    error: beatProcessingError,
+    startJob: startBeatDetection,
+  } = useProcessingJob(handleProcessingComplete);
+
+  const {
+    isProcessing: isTranscribing,
+    error: transcriptionError,
+    startJob: startTranscription,
+  } = useProcessingJob(handleProcessingComplete);
+
   // Stem-to-Part mapping state
   const [stemMappings, setStemMappings] = useState<
     Record<string, { checked: boolean; instrumentName: string }>
@@ -623,6 +635,224 @@ export default function ArrangementDetailPage() {
                   </Box>
                 </Flex>
               )}
+
+              {/* Beat Detection / Sync Map Generation */}
+              {fullMix && !hasSyncMap && !isBeatProcessing && (
+                <Flex
+                  align="center"
+                  p={4}
+                  borderRadius="lg"
+                  bg="purple.50"
+                  border="1px solid"
+                  borderColor="purple.100"
+                  mb={3}
+                >
+                  <Box flex={1}>
+                    <Text fontWeight="semibold" fontSize="sm" color="gray.800">
+                      Auto-Generate Sync Map
+                    </Text>
+                    <Text fontSize="xs" color="gray.500">
+                      Detect beats in your audio and create a bar-to-timestamp
+                      mapping for real-time score following
+                    </Text>
+                  </Box>
+                  <Button
+                    size="sm"
+                    colorPalette="purple"
+                    onClick={() => startBeatDetection(fullMix.id, "beat_detection")}
+                  >
+                    Generate Sync Map
+                  </Button>
+                </Flex>
+              )}
+
+              {isBeatProcessing && (
+                <Flex
+                  align="center"
+                  p={4}
+                  borderRadius="lg"
+                  bg="blue.50"
+                  border="1px solid"
+                  borderColor="blue.100"
+                  gap={3}
+                  mb={3}
+                >
+                  <Spinner size="sm" color="blue.500" />
+                  <Box>
+                    <Text fontWeight="semibold" fontSize="sm" color="blue.700">
+                      Generating sync map...
+                    </Text>
+                    <Text fontSize="xs" color="blue.500">
+                      Detecting beats and mapping bar positions. Usually takes under a minute.
+                    </Text>
+                  </Box>
+                </Flex>
+              )}
+
+              {beatProcessingError && (
+                <Flex
+                  align="center"
+                  p={4}
+                  borderRadius="lg"
+                  bg="red.50"
+                  border="1px solid"
+                  borderColor="red.100"
+                  mb={3}
+                >
+                  <Box flex={1}>
+                    <Text fontWeight="semibold" fontSize="sm" color="red.700">
+                      Beat detection failed
+                    </Text>
+                    <Text fontSize="xs" color="red.500">
+                      {beatProcessingError}
+                    </Text>
+                  </Box>
+                  {fullMix && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      colorPalette="red"
+                      onClick={() => startBeatDetection(fullMix.id, "beat_detection")}
+                    >
+                      Retry
+                    </Button>
+                  )}
+                </Flex>
+              )}
+
+              {fullMix && hasSyncMap && (
+                <Flex
+                  align="center"
+                  p={4}
+                  borderRadius="lg"
+                  bg="green.50"
+                  border="1px solid"
+                  borderColor="green.100"
+                  mb={3}
+                >
+                  <Flex
+                    w="36px"
+                    h="36px"
+                    borderRadius="full"
+                    bg="green.100"
+                    align="center"
+                    justify="center"
+                    flexShrink={0}
+                    mr={4}
+                    fontSize="md"
+                  >
+                    ✓
+                  </Flex>
+                  <Box flex={1}>
+                    <Text fontWeight="semibold" fontSize="sm" color="green.700">
+                      Sync map created
+                    </Text>
+                    <Text fontSize="xs" color="gray.500">
+                      AI-generated bar-to-timestamp mapping is active
+                    </Text>
+                  </Box>
+                  <Badge colorPalette="purple" variant="subtle" fontSize="xs">
+                    AI-Generated
+                  </Badge>
+                </Flex>
+              )}
+
+              {/* Sheet Music Transcription */}
+              {(() => {
+                // Find stems that have a matching part but no sheet music yet
+                const stemsForTranscription = stems.filter((stem) => {
+                  if (!stem.stemName) return false;
+                  const matchingPart = arrangement.parts.find((p) =>
+                    p.instrumentName.toLowerCase().includes(stem.stemName!.toLowerCase())
+                  );
+                  return matchingPart && matchingPart.sheetMusicAssets.length === 0;
+                });
+
+                if (stemsForTranscription.length === 0 && !isTranscribing && !transcriptionError) {
+                  return null;
+                }
+
+                return (
+                  <>
+                    {!isTranscribing && !transcriptionError && stemsForTranscription.length > 0 && (
+                      <Flex
+                        align="center"
+                        p={4}
+                        borderRadius="lg"
+                        bg="purple.50"
+                        border="1px solid"
+                        borderColor="purple.100"
+                        mb={3}
+                      >
+                        <Box flex={1}>
+                          <Text fontWeight="semibold" fontSize="sm" color="gray.800">
+                            Generate Sheet Music
+                          </Text>
+                          <Text fontSize="xs" color="gray.500">
+                            Transcribe {stemsForTranscription.map((s) => s.stemName).join(", ")}{" "}
+                            stem{stemsForTranscription.length > 1 ? "s" : ""} to MusicXML using AI
+                          </Text>
+                        </Box>
+                        <Button
+                          size="sm"
+                          colorPalette="purple"
+                          onClick={() => {
+                            for (const stem of stemsForTranscription) {
+                              startTranscription(stem.id, "transcription");
+                            }
+                          }}
+                        >
+                          Transcribe{stemsForTranscription.length > 1 ? " All" : ""}
+                        </Button>
+                      </Flex>
+                    )}
+
+                    {isTranscribing && (
+                      <Flex
+                        align="center"
+                        p={4}
+                        borderRadius="lg"
+                        bg="blue.50"
+                        border="1px solid"
+                        borderColor="blue.100"
+                        gap={3}
+                        mb={3}
+                      >
+                        <Spinner size="sm" color="blue.500" />
+                        <Box>
+                          <Text fontWeight="semibold" fontSize="sm" color="blue.700">
+                            Transcribing audio to sheet music...
+                          </Text>
+                          <Text fontSize="xs" color="blue.500">
+                            AI is detecting notes and generating MusicXML. This may take 2-5 minutes.
+                          </Text>
+                        </Box>
+                      </Flex>
+                    )}
+
+                    {transcriptionError && (
+                      <Flex
+                        align="center"
+                        p={4}
+                        borderRadius="lg"
+                        bg="red.50"
+                        border="1px solid"
+                        borderColor="red.100"
+                        mb={3}
+                      >
+                        <Box flex={1}>
+                          <Text fontWeight="semibold" fontSize="sm" color="red.700">
+                            Transcription failed
+                          </Text>
+                          <Text fontSize="xs" color="red.500">
+                            {transcriptionError}
+                          </Text>
+                        </Box>
+                      </Flex>
+                    )}
+                  </>
+                );
+              })()}
 
               {/* Stem-to-Part Mapping Checklist */}
               {showStemMapping && Object.keys(stemMappings).length > 0 && (
