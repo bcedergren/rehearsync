@@ -18,6 +18,8 @@ import {
   GitBranch,
   Bookmark,
   Radio,
+  Sparkles,
+  AudioWaveform,
 } from "lucide-react";
 import Image from "next/image";
 import NextLink from "next/link";
@@ -49,14 +51,14 @@ const PLANS = [
     yearlyPeriod: "/year",
     description: "For active bands and ensembles",
     features: [
-      "1 band",
-      "Up to 15 members",
+      "1 band, up to 15 members",
       "Unlimited songs",
       "MusicXML + PDF charts",
-      "Audio stems & backing tracks",
-      "Section markers",
+      "AI stem separation",
+      "AI section detection",
+      "Waveform audio player",
+      "Email invites",
       "Arrangement versioning",
-      "Priority support",
     ],
     cta: "Subscribe",
     highlight: true,
@@ -70,12 +72,12 @@ const PLANS = [
     description: "For music directors and large groups",
     features: [
       "Everything in Band",
-      "Unlimited bands",
-      "Unlimited members",
+      "Unlimited bands & members",
       "Live rehearsal sync",
       "Real-time transport controls",
       "Sync map editor",
-      "Session history & analytics",
+      "Beat detection & tempo maps",
+      "Session analytics",
       "Dedicated support",
     ],
     cta: "Subscribe",
@@ -158,8 +160,9 @@ export default function HomePage() {
             maxW="600px"
           >
             RehearsSync keeps your sheet music, audio tracks, and part
-            assignments in one place. When rehearsal starts, every screen
-            stays in sync — so your band can focus on playing, not page turns.
+            assignments in one place — with AI that splits stems, detects tempo,
+            and maps out song sections for you. When rehearsal starts, every
+            screen stays in sync.
           </Text>
           <Flex gap={4} flexWrap="wrap" justify="center">
             <Button size="lg" colorPalette="blue" px={8} asChild>
@@ -249,17 +252,17 @@ export default function HomePage() {
               {
                 step: "01",
                 title: "Build your roster",
-                desc: "Create a band, invite members by email, and set up instrument parts. Takes about a minute.",
+                desc: "Create a band, add members and instruments in a quick setup wizard, then send email invites — everyone gets a link to join.",
               },
               {
                 step: "02",
                 title: "Load in your music",
-                desc: "Upload PDF or MusicXML charts, drop in backing tracks and stems, tag sections like Verse and Chorus.",
+                desc: "Upload PDF or MusicXML charts and a full mix. AI splits it into stems, detects the tempo, and maps out sections automatically.",
               },
               {
                 step: "03",
                 title: "Hit play together",
-                desc: "Start a live session. The leader controls transport — play, pause, jump to the bridge — and every screen follows.",
+                desc: "Start a live session. The leader controls transport — play, pause, jump to the bridge — and every screen follows along in real time.",
               },
             ].map((item) => (
               <VStack key={item.step} gap={4} align="start">
@@ -308,29 +311,41 @@ export default function HomePage() {
             color="gray.900"
             textAlign="center"
           >
-            Six things that actually matter in rehearsal
+            Everything your rehearsal needs
           </Heading>
           <Box mb={16} />
 
-          <SimpleGrid columns={{ base: 1, sm: 2, lg: 3, xl: 6 }} gap={5}>
+          <SimpleGrid columns={{ base: 1, sm: 2, lg: 4 }} gap={5}>
             {[
               {
                 icon: <Music size={24} />,
                 color: "blue",
                 title: "Sheet Music",
-                desc: "Upload PDF and MusicXML charts per part. Draft, activate, retire — one source of truth on every music stand.",
+                desc: "Upload PDF and MusicXML charts per part with in-browser rendering. One source of truth on every music stand.",
               },
               {
-                icon: <Headphones size={24} />,
+                icon: <Sparkles size={24} />,
+                color: "violet",
+                title: "AI Audio Processing",
+                desc: "Upload a full mix and AI splits it into six stems — vocals, drums, bass, guitar, piano, and other — automatically.",
+              },
+              {
+                icon: <AudioWaveform size={24} />,
                 color: "purple",
-                title: "Audio & Stems",
-                desc: "Full mixes, click tracks, individual stems. Every member pulls up exactly what they need to hear.",
+                title: "Waveform Player",
+                desc: "Interactive color-coded waveforms for every track. Click anywhere to seek, switch between stems instantly.",
               },
               {
                 icon: <Users size={24} />,
                 color: "orange",
-                title: "Part Assignments",
-                desc: "Map each instrument to a band member. They open a song, they see their chart — not the whole stack.",
+                title: "Email Invites",
+                desc: "Invite band members by email during setup or anytime after. They get a one-click link to join your band.",
+              },
+              {
+                icon: <Bookmark size={24} />,
+                color: "pink",
+                title: "AI Section Detection",
+                desc: "AI analyzes your audio and charts to identify Intro, Verse, Chorus, Bridge — so you can jump to any section instantly.",
               },
               {
                 icon: <GitBranch size={24} />,
@@ -339,10 +354,10 @@ export default function HomePage() {
                 desc: "Trying a new outro? Draft it without touching the published version. Archive the old one when you\u2019re sure.",
               },
               {
-                icon: <Bookmark size={24} />,
-                color: "pink",
-                title: "Section Markers",
-                desc: "Tag Intro, Verse, Chorus, Bridge — then jump to any section mid-rehearsal with one tap.",
+                icon: <Headphones size={24} />,
+                color: "teal",
+                title: "Sync Maps & Beat Detection",
+                desc: "AI detects tempo and maps audio timestamps to bar numbers, so playback and sheet music stay perfectly in sync.",
               },
               {
                 icon: <Radio size={24} />,
@@ -387,12 +402,12 @@ export default function HomePage() {
       >
         <Box maxW="700px" mx="auto">
           <Heading size={{ base: "lg", md: "xl" }} mb={3} fontWeight="semibold">
-            Built by musicians, for musicians.
+            Built by musicians, powered by AI.
           </Heading>
           <Text fontSize={{ base: "md", md: "lg" }} color="blue.100" lineHeight="1.7">
-            We got tired of texting PDF charts in group chats and arguing
-            about which version of the bridge we&apos;re playing. So we built
-            the tool we wished existed.
+            We got tired of texting PDF charts in group chats, manually splitting stems,
+            and arguing about which version of the bridge we&apos;re playing.
+            So we built the tool we wished existed — and let AI handle the tedious parts.
           </Text>
         </Box>
       </Box>
@@ -534,7 +549,8 @@ export default function HomePage() {
             Your band deserves better than a shared Google Drive.
           </Heading>
           <Text color="gray.500" fontSize="lg" mb={8}>
-            Set up your first band in under two minutes. Free, no credit card.
+            Create your band, invite members by email, and upload your first song
+            in under two minutes. Free, no credit card.
           </Text>
           <Button size="lg" colorPalette="blue" px={10} asChild>
             <NextLink href="/register">Get Started Free</NextLink>
