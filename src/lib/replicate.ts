@@ -6,7 +6,7 @@ const replicate = new Replicate({
 
 export const MODELS = {
   DEMUCS: "cjwbw/demucs:25a173108cff36ef9f80f854c162d01df9e6528be175794b81158fa03836d953",
-  MT3: "turian/multi-task-music-transcription:159965ec81a23b88d50e4636f9539f2cbb6f50503d8f14e915069526b4a9edfb",
+  PIANO_TRANSCRIPTION: "bytedance/piano-transcription:8978296ce461e1fd8caae879d59063bc8009f57b734c1c8a2c7b19de0016fd35",
 } as const;
 
 function getWebhookUrl(): string {
@@ -33,10 +33,9 @@ export async function createStemSeparationPrediction(audioUrl: string) {
 
 export async function createTranscriptionPrediction(audioUrl: string) {
   const prediction = await replicate.predictions.create({
-    version: MODELS.MT3.split(":")[1],
+    version: MODELS.PIANO_TRANSCRIPTION.split(":")[1],
     input: {
-      audio_file: audioUrl,
-      model_type: "mt3",
+      audio_input: audioUrl,
     },
     webhook: getWebhookUrl(),
     webhook_events_filter: ["completed"],

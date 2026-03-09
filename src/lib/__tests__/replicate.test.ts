@@ -28,9 +28,9 @@ describe("MODELS", () => {
     expect(MODELS.DEMUCS.split(":")[1]).toHaveLength(64);
   });
 
-  it("has MT3 model with version hash", () => {
-    expect(MODELS.MT3).toContain("turian/multi-task-music-transcription:");
-    expect(MODELS.MT3.split(":")[1]).toHaveLength(64);
+  it("has PIANO_TRANSCRIPTION model with version hash", () => {
+    expect(MODELS.PIANO_TRANSCRIPTION).toContain("bytedance/piano-transcription:");
+    expect(MODELS.PIANO_TRANSCRIPTION.split(":")[1]).toHaveLength(64);
   });
 });
 
@@ -54,8 +54,8 @@ describe("createTranscriptionPrediction", () => {
 
     expect(result).toEqual({ id: "pred-123" });
     expect(mockCreate).toHaveBeenCalledWith({
-      version: MODELS.MT3.split(":")[1],
-      input: { audio_file: "https://example.com/stem.mp3", model_type: "mt3" },
+      version: MODELS.PIANO_TRANSCRIPTION.split(":")[1],
+      input: { audio_input: "https://example.com/stem.mp3" },
       webhook: "https://test.supabase.co/functions/v1/replicate-webhook",
       webhook_events_filter: ["completed"],
     });
