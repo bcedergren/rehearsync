@@ -345,6 +345,7 @@ async function handleBeatDetection(
   const { data: syncMap, error: syncMapError } = await supabase
     .from("sync_maps")
     .insert({
+      id: crypto.randomUUID(),
       arrangement_id: arrangementId,
       audio_asset_id: audioAssetId,
       source_type: "generated",
@@ -364,6 +365,7 @@ async function handleBeatDetection(
   for (let bar = 1; bar <= totalBars; bar++) {
     const timeMs = (bar - 1) * barDurationMs;
     points.push({
+      id: crypto.randomUUID(),
       sync_map_id: syncMap.id,
       time_ms: timeMs,
       bar_number: bar,
