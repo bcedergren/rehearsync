@@ -5,8 +5,7 @@ const replicate = new Replicate({
 });
 
 export const MODELS = {
-  DEMUCS: "cjwbw/demucs:25a173108cff36ef9f80f854c162d01df9e6528be175794b81571f6571b07088",
-  BASIC_PITCH: "spotify/basic-pitch:7a65a38d58a15333dd2d9030c8796de08e74ec12254bfbc66db4a2cce2627b09",
+  DEMUCS: "cjwbw/demucs:25a173108cff36ef9f80f854c162d01df9e6528be175794b81158fa03836d953",
 } as const;
 
 function getWebhookUrl(): string {
@@ -30,29 +29,20 @@ export async function createStemSeparationPrediction(audioUrl: string) {
   return prediction;
 }
 
-export async function createTranscriptionPrediction(audioUrl: string) {
-  const prediction = await replicate.predictions.create({
-    version: MODELS.BASIC_PITCH.split(":")[1],
-    input: {
-      audio_path: audioUrl,
-    },
-    webhook: getWebhookUrl(),
-    webhook_events_filter: ["completed"],
-  });
-  return prediction;
+export async function createTranscriptionPrediction(_audioUrl: string) {
+  // spotify/basic-pitch was removed from Replicate.
+  // TODO: Replace with self-hosted basic-pitch or alternative model
+  throw new Error(
+    "Transcription is temporarily unavailable — the basic-pitch model was removed from Replicate"
+  );
 }
 
-export async function createBeatDetectionPrediction(audioUrl: string) {
-  // Basic pitch also outputs note onsets which can be used for beat detection
-  const prediction = await replicate.predictions.create({
-    version: MODELS.BASIC_PITCH.split(":")[1],
-    input: {
-      audio_path: audioUrl,
-    },
-    webhook: getWebhookUrl(),
-    webhook_events_filter: ["completed"],
-  });
-  return prediction;
+export async function createBeatDetectionPrediction(_audioUrl: string) {
+  // spotify/basic-pitch was removed from Replicate.
+  // TODO: Replace with self-hosted basic-pitch or alternative model
+  throw new Error(
+    "Beat detection is temporarily unavailable — the basic-pitch model was removed from Replicate"
+  );
 }
 
 export { replicate };

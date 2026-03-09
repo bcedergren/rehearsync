@@ -27,11 +27,6 @@ describe("MODELS", () => {
     expect(MODELS.DEMUCS).toContain("cjwbw/demucs:");
     expect(MODELS.DEMUCS.split(":")[1]).toHaveLength(64);
   });
-
-  it("has BASIC_PITCH model with version hash", () => {
-    expect(MODELS.BASIC_PITCH).toContain("spotify/basic-pitch:");
-    expect(MODELS.BASIC_PITCH.split(":")[1]).toHaveLength(64);
-  });
 });
 
 describe("createStemSeparationPrediction", () => {
@@ -49,27 +44,17 @@ describe("createStemSeparationPrediction", () => {
 });
 
 describe("createTranscriptionPrediction", () => {
-  it("creates prediction with basic-pitch model", async () => {
-    await createTranscriptionPrediction("https://example.com/stem.mp3");
-
-    expect(mockCreate).toHaveBeenCalledWith({
-      version: MODELS.BASIC_PITCH.split(":")[1],
-      input: { audio_path: "https://example.com/stem.mp3" },
-      webhook: "https://test.supabase.co/functions/v1/replicate-webhook",
-      webhook_events_filter: ["completed"],
-    });
+  it("throws unavailable error (basic-pitch removed from Replicate)", async () => {
+    await expect(
+      createTranscriptionPrediction("https://example.com/stem.mp3")
+    ).rejects.toThrow("temporarily unavailable");
   });
 });
 
 describe("createBeatDetectionPrediction", () => {
-  it("creates prediction with basic-pitch model for beat detection", async () => {
-    await createBeatDetectionPrediction("https://example.com/mix.mp3");
-
-    expect(mockCreate).toHaveBeenCalledWith({
-      version: MODELS.BASIC_PITCH.split(":")[1],
-      input: { audio_path: "https://example.com/mix.mp3" },
-      webhook: "https://test.supabase.co/functions/v1/replicate-webhook",
-      webhook_events_filter: ["completed"],
-    });
+  it("throws unavailable error (basic-pitch removed from Replicate)", async () => {
+    await expect(
+      createBeatDetectionPrediction("https://example.com/mix.mp3")
+    ).rejects.toThrow("temporarily unavailable");
   });
 });

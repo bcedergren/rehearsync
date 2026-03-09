@@ -17,7 +17,6 @@ import {
   Input,
   NativeSelect,
   Spinner,
-  Link,
   Checkbox,
 } from "@chakra-ui/react";
 import { useParams, useRouter } from "next/navigation";
@@ -77,12 +76,22 @@ interface Arrangement {
   song: { id: string; title: string; bandId: string };
 }
 
+// --- Step config (reordered: audio first to support AI pipeline) ---
+
 const STEP_CONFIG = [
+  {
+    key: "audio",
+    label: "Upload Audio",
+    description: "Add a full mix, backing track, click, or stems",
+    icon: "1",
+    action: "upload-audio",
+    actionLabel: "Upload Audio",
+  },
   {
     key: "parts",
     label: "Define Parts",
     description: "Add instrument parts to this arrangement",
-    icon: "🎹",
+    icon: "2",
     action: "parts",
     actionLabel: "Manage Parts",
   },
@@ -90,25 +99,15 @@ const STEP_CONFIG = [
     key: "charts",
     label: "Upload Charts",
     description: "Upload sheet music (PDF or MusicXML) for each part",
-    tip: { text: "Need transcriptions? Try klang.io", url: "https://klang.io" },
-    icon: "📄",
+    icon: "3",
     action: "upload-sheet-music",
     actionLabel: "Upload Sheet Music",
-  },
-  {
-    key: "audio",
-    label: "Upload Audio",
-    description: "Add a backing track, click, or stems",
-    tip: { text: "Or use AI Processing below to auto-separate stems", url: "#ai-processing" },
-    icon: "🎧",
-    action: "upload-audio",
-    actionLabel: "Upload Audio",
   },
   {
     key: "assign",
     label: "Assign Parts",
     description: "Assign band members to their instrument parts",
-    icon: "👤",
+    icon: "4",
     action: "assign",
     actionLabel: "Assign Members",
   },
@@ -116,15 +115,15 @@ const STEP_CONFIG = [
     key: "sections",
     label: "Mark Sections",
     description: "Define song sections (Intro, Verse, Chorus, etc.)",
-    icon: "📐",
+    icon: "5",
     action: "sections",
     actionLabel: "Edit Sections",
   },
   {
     key: "syncMap",
     label: "Create Sync Map",
-    description: "Map audio timestamps to bar numbers for real-time score following",
-    icon: "🔗",
+    description: "Map audio timestamps to bar numbers for score following",
+    icon: "6",
     action: "sync-map",
     actionLabel: "Edit Sync Map",
   },
@@ -318,7 +317,10 @@ export default function ArrangementDetailPage() {
   };
   const status = statusConfig[arrangement.status] || statusConfig.draft;
 
-  // Calculate step completion
+  // Derived state
+  const fullMix = arrangement.audioAssets.find((a) => a.assetRole === "full_mix");
+  const stems = arrangement.audioAssets.filter((a) => a.assetRole === "stem");
+  const hasStems = stems.length > 0;
   const hasParts = arrangement.parts.length > 0;
   const hasCharts = arrangement.parts.some((p) => p.sheetMusicAssets.length > 0);
   const hasAudio = arrangement.audioAssets.length > 0;
@@ -326,9 +328,328 @@ export default function ArrangementDetailPage() {
   const hasSections = arrangement.sectionMarkers.length > 0;
   const hasSyncMap = readiness?.checks.activeSyncMapPresent ?? false;
 
-  const stepStatus = [hasParts, hasCharts, hasAudio, hasAssignments, hasSections, hasSyncMap];
+  // New step order: audio, parts, charts, assign, sections, syncMap
+  const stepStatus = [hasAudio, hasParts, hasCharts, hasAssignments, hasSections, hasSyncMap];
   const completedSteps = stepStatus.filter(Boolean).length;
   const totalSteps = stepStatus.length;
+
+  // Initialize stem mappings when stems appear and no parts exist
+  if (hasStems && Object.keys(stemMappings).length === 0 && !hasParts) {
+    const initial: Record<string, { checked: boolean; instrumentName: string }> = {};
+    for (const stem of stems) {
+      if (stem.stemName) {
+        initial[stem.id] = {
+          checked: true,
+          instrumentName: stem.stemName.charAt(0).toUpperCase() + stem.stemName.slice(1),
+        };
+      }
+    }
+    if (Object.keys(initial).length > 0) {
+      setStemMappings(initial);
+    }
+  }
+
+  // Stems available for transcription (have matching part but no sheet music)
+  const stemsForTranscription = stems.filter((stem) => {
+    if (!stem.stemName) return false;
+    const matchingPart = arrangement.parts.find((p) =>
+      p.instrumentName.toLowerCase().includes(stem.stemName!.toLowerCase())
+    );
+    return matchingPart && matchingPart.sheetMusicAssets.length === 0;
+  });
+
+  // --- Step action handlers ---
+
+  function handleStepAction(action: string) {
+    if (action === "upload-sheet-music") {
+      setShowUploadSheet(true);
+    } else if (action === "upload-audio") {
+      setShowUploadAudio(true);
+    } else {
+      router.push(`${basePath}/${action}`);
+    }
+  }
+
+  // --- Inline AI sub-components ---
+
+  function renderAiChip(label: string) {
+    return (
+      <Badge colorPalette="purple" variant="subtle" fontSize="2xs" px={1.5}>
+        AI
+        {label ? ` ${label}` : ""}
+      </Badge>
+    );
+  }
+
+  function renderProcessingStatus(
+    isProcessing: boolean,
+    error: string | null,
+    processingLabel: string,
+    processingHint: string,
+    errorLabel: string,
+    onRetry?: () => void
+  ) {
+    if (isProcessing) {
+      return (
+        <Flex align="center" gap={3} p={3} borderRadius="md" bg="blue.50" border="1px solid" borderColor="blue.100">
+          <Spinner size="sm" color="blue.500" />
+          <Box>
+            <Text fontWeight="medium" fontSize="xs" color="blue.700">{processingLabel}</Text>
+            <Text fontSize="xs" color="blue.500">{processingHint}</Text>
+          </Box>
+        </Flex>
+      );
+    }
+    if (error) {
+      return (
+        <Flex align="center" p={3} borderRadius="md" bg="red.50" border="1px solid" borderColor="red.100">
+          <Box flex={1}>
+            <Text fontWeight="medium" fontSize="xs" color="red.700">{errorLabel}</Text>
+            <Text fontSize="xs" color="red.500">{error}</Text>
+          </Box>
+          {onRetry && (
+            <Button size="xs" variant="outline" colorPalette="red" onClick={onRetry}>
+              Retry
+            </Button>
+          )}
+        </Flex>
+      );
+    }
+    return null;
+  }
+
+  // --- Audio step: inline AI (stem separation) ---
+
+  function renderAudioStepExtra() {
+    const showStemButton = fullMix && !hasStems && !isStemProcessing && !stemProcessingError;
+
+    return (
+      <VStack align="stretch" gap={2} mt={2}>
+        {showStemButton && (
+          <Flex align="center" gap={2} p={3} borderRadius="md" bg="purple.50" border="1px solid" borderColor="purple.100">
+            <Box flex={1}>
+              <Flex align="center" gap={1.5}>
+                <Text fontWeight="medium" fontSize="xs" color="gray.700">Separate Stems</Text>
+                {renderAiChip("")}
+              </Flex>
+              <Text fontSize="xs" color="gray.500">
+                Split your full mix into vocals, drums, bass & other
+              </Text>
+            </Box>
+            <Button
+              size="xs"
+              colorPalette="purple"
+              onClick={() => startStemSeparation(fullMix.id, "stem_separation")}
+            >
+              Separate
+            </Button>
+          </Flex>
+        )}
+
+        {renderProcessingStatus(
+          isStemProcessing,
+          stemProcessingError,
+          "Separating stems...",
+          "Usually takes 1-3 minutes. You can leave and come back.",
+          "Stem separation failed",
+          fullMix ? () => startStemSeparation(fullMix.id, "stem_separation") : undefined
+        )}
+
+        {hasStems && (
+          <Flex align="center" gap={2} p={3} borderRadius="md" bg="green.50" border="1px solid" borderColor="green.100">
+            <Text fontSize="xs" color="green.700" fontWeight="medium">
+              {stems.length} stems separated
+            </Text>
+            <Text fontSize="xs" color="gray.500">
+              ({stems.map((s) => s.stemName).join(", ")})
+            </Text>
+          </Flex>
+        )}
+      </VStack>
+    );
+  }
+
+  // --- Parts step: inline AI (stem-to-part mapping) ---
+
+  function renderPartsStepExtra() {
+    const showStemMapping = hasStems && !hasParts && Object.keys(stemMappings).length > 0;
+    if (!showStemMapping) return null;
+
+    return (
+      <Box mt={2} p={3} borderRadius="md" bg="purple.50" border="1px solid" borderColor="purple.100">
+        <Flex align="center" gap={1.5} mb={2}>
+          <Text fontWeight="medium" fontSize="xs" color="gray.700">Map Stems to Parts</Text>
+          {renderAiChip("")}
+        </Flex>
+        <Text fontSize="xs" color="gray.500" mb={3}>
+          Select stems to create instrument parts from. Rename to match your arrangement.
+        </Text>
+        <VStack align="stretch" gap={2}>
+          {stems.map((stem) => {
+            const mapping = stemMappings[stem.id];
+            if (!mapping) return null;
+            return (
+              <Flex key={stem.id} align="center" gap={3} p={2} bg="white" borderRadius="md" border="1px solid" borderColor="gray.100">
+                <Checkbox.Root
+                  checked={mapping.checked}
+                  onCheckedChange={(e) =>
+                    setStemMappings((prev) => ({
+                      ...prev,
+                      [stem.id]: { ...prev[stem.id], checked: !!e.checked },
+                    }))
+                  }
+                >
+                  <Checkbox.HiddenInput />
+                  <Checkbox.Control />
+                </Checkbox.Root>
+                <Badge colorPalette="purple" variant="subtle" fontSize="2xs">{stem.stemName}</Badge>
+                <Input
+                  size="sm"
+                  flex={1}
+                  value={mapping.instrumentName}
+                  onChange={(e) =>
+                    setStemMappings((prev) => ({
+                      ...prev,
+                      [stem.id]: { ...prev[stem.id], instrumentName: e.target.value },
+                    }))
+                  }
+                  placeholder="Instrument name"
+                />
+              </Flex>
+            );
+          })}
+        </VStack>
+        <Flex justify="flex-end" mt={3}>
+          <Button
+            size="xs"
+            colorPalette="purple"
+            onClick={handleCreatePartsFromStems}
+            loading={createPartMutation.isPending}
+            disabled={!Object.values(stemMappings).some((m) => m.checked && m.instrumentName.trim())}
+          >
+            Create Parts from Stems
+          </Button>
+        </Flex>
+      </Box>
+    );
+  }
+
+  // --- Charts step: inline AI (transcription) ---
+
+  function renderChartsStepExtra() {
+    const showTranscribe = stemsForTranscription.length > 0 && !isTranscribing && !transcriptionError;
+
+    return (
+      <VStack align="stretch" gap={2} mt={2}>
+        {showTranscribe && (
+          <Flex align="center" gap={2} p={3} borderRadius="md" bg="purple.50" border="1px solid" borderColor="purple.100">
+            <Box flex={1}>
+              <Flex align="center" gap={1.5}>
+                <Text fontWeight="medium" fontSize="xs" color="gray.700">Generate Sheet Music</Text>
+                {renderAiChip("")}
+              </Flex>
+              <Text fontSize="xs" color="gray.500">
+                Transcribe {stemsForTranscription.map((s) => s.stemName).join(", ")} to MusicXML
+              </Text>
+            </Box>
+            <Button
+              size="xs"
+              colorPalette="purple"
+              onClick={() => {
+                for (const stem of stemsForTranscription) {
+                  startTranscription(stem.id, "transcription");
+                }
+              }}
+            >
+              Transcribe{stemsForTranscription.length > 1 ? " All" : ""}
+            </Button>
+          </Flex>
+        )}
+
+        {renderProcessingStatus(
+          isTranscribing,
+          transcriptionError,
+          "Transcribing audio to sheet music...",
+          "AI is detecting notes and generating MusicXML. May take 2-5 minutes.",
+          "Transcription failed"
+        )}
+      </VStack>
+    );
+  }
+
+  // --- Sync Map step: inline AI (beat detection) ---
+
+  function renderSyncMapStepExtra() {
+    const showBeatButton = fullMix && !hasSyncMap && !isBeatProcessing && !beatProcessingError;
+
+    return (
+      <VStack align="stretch" gap={2} mt={2}>
+        {showBeatButton && (
+          <Flex align="center" gap={2} p={3} borderRadius="md" bg="purple.50" border="1px solid" borderColor="purple.100">
+            <Box flex={1}>
+              <Flex align="center" gap={1.5}>
+                <Text fontWeight="medium" fontSize="xs" color="gray.700">Auto-Generate Sync Map</Text>
+                {renderAiChip("")}
+              </Flex>
+              <Text fontSize="xs" color="gray.500">
+                Detect beats and create bar-to-timestamp mapping
+              </Text>
+            </Box>
+            <Button
+              size="xs"
+              colorPalette="purple"
+              onClick={() => startBeatDetection(fullMix.id, "beat_detection")}
+            >
+              Generate
+            </Button>
+          </Flex>
+        )}
+
+        {renderProcessingStatus(
+          isBeatProcessing,
+          beatProcessingError,
+          "Generating sync map...",
+          "Detecting beats and mapping bar positions. Usually under a minute.",
+          "Beat detection failed",
+          fullMix ? () => startBeatDetection(fullMix.id, "beat_detection") : undefined
+        )}
+
+        {hasSyncMap && (
+          <Flex align="center" gap={2} p={3} borderRadius="md" bg="green.50" border="1px solid" borderColor="green.100">
+            <Text fontSize="xs" color="green.700" fontWeight="medium">Sync map active</Text>
+            {renderAiChip("Generated")}
+          </Flex>
+        )}
+      </VStack>
+    );
+  }
+
+  // Map step keys to their inline AI extras
+  function renderStepExtra(key: string) {
+    switch (key) {
+      case "audio": return renderAudioStepExtra();
+      case "parts": return renderPartsStepExtra();
+      case "charts": return renderChartsStepExtra();
+      case "syncMap": return renderSyncMapStepExtra();
+      default: return null;
+    }
+  }
+
+  // Check if a step has AI content to show
+  function stepHasAiContent(key: string): boolean {
+    switch (key) {
+      case "audio":
+        return !!(fullMix && (!hasStems || isStemProcessing || stemProcessingError)) || hasStems;
+      case "parts":
+        return hasStems && !hasParts && Object.keys(stemMappings).length > 0;
+      case "charts":
+        return stemsForTranscription.length > 0 || isTranscribing || !!transcriptionError;
+      case "syncMap":
+        return !!(fullMix && (!hasSyncMap || isBeatProcessing || beatProcessingError)) || hasSyncMap;
+      default:
+        return false;
+    }
+  }
 
   return (
     <Box maxW="1000px">
@@ -370,7 +691,7 @@ export default function ArrangementDetailPage() {
         )}
       </Flex>
 
-      {/* Setup Steps */}
+      {/* Setup Checklist with integrated AI */}
       {arrangement.status === "draft" && (
         <Card.Root mb={8} bg="white" borderWidth="1px" borderColor="gray.100">
           <Card.Body p={6}>
@@ -381,568 +702,79 @@ export default function ArrangementDetailPage() {
             <VStack align="stretch" gap={3}>
               {STEP_CONFIG.map((step, i) => {
                 const done = stepStatus[i];
+                const hasAi = stepHasAiContent(step.key);
                 return (
-                  <Flex
-                    key={step.key}
-                    align="center"
-                    p={4}
-                    borderRadius="lg"
-                    bg={done ? "green.50" : "gray.50"}
-                    border="1px solid"
-                    borderColor={done ? "green.100" : "gray.100"}
-                    transition="all 0.15s"
-                    _hover={{ borderColor: done ? "green.200" : "blue.200", shadow: "sm" }}
-                  >
+                  <Box key={step.key}>
                     <Flex
-                      w="36px"
-                      h="36px"
-                      borderRadius="full"
-                      bg={done ? "green.100" : "white"}
-                      border={done ? "none" : "2px solid"}
-                      borderColor="gray.200"
                       align="center"
-                      justify="center"
-                      flexShrink={0}
-                      mr={4}
-                      fontSize="md"
+                      p={4}
+                      borderRadius={hasAi ? "lg lg 0 0" : "lg"}
+                      bg={done ? "green.50" : "gray.50"}
+                      border="1px solid"
+                      borderColor={done ? "green.100" : "gray.100"}
+                      borderBottomWidth={hasAi ? 0 : "1px"}
+                      transition="all 0.15s"
+                      _hover={{ borderColor: done ? "green.200" : "blue.200", shadow: "sm" }}
                     >
-                      {done ? "✓" : step.icon}
+                      <Flex
+                        w="32px"
+                        h="32px"
+                        borderRadius="full"
+                        bg={done ? "green.100" : "white"}
+                        border={done ? "none" : "2px solid"}
+                        borderColor="gray.200"
+                        align="center"
+                        justify="center"
+                        flexShrink={0}
+                        mr={4}
+                        fontSize="sm"
+                        fontWeight="bold"
+                        color={done ? "green.700" : "gray.400"}
+                      >
+                        {done ? "✓" : step.icon}
+                      </Flex>
+                      <Box flex={1}>
+                        <Text fontWeight="semibold" fontSize="sm" color={done ? "green.700" : "gray.800"}>
+                          {step.label}
+                        </Text>
+                        <Text fontSize="xs" color="gray.500">
+                          {step.description}
+                        </Text>
+                      </Box>
+                      <Button
+                        size="sm"
+                        minW="140px"
+                        variant={done ? "outline" : "solid"}
+                        colorPalette={done ? "gray" : "blue"}
+                        onClick={() => handleStepAction(step.action)}
+                      >
+                        {done ? "Edit" : step.actionLabel}
+                      </Button>
                     </Flex>
-                    <Box flex={1}>
-                      <Text fontWeight="semibold" fontSize="sm" color={done ? "green.700" : "gray.800"}>
-                        {step.label}
-                      </Text>
-                      <Text fontSize="xs" color="gray.500">
-                        {step.description}
-                        {"tip" in step && step.tip && (
-                          <>
-                            {" — "}
-                            <Link
-                              href={step.tip.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              color="blue.500"
-                              textDecoration="underline"
-                              _hover={{ color: "blue.600" }}
-                            >
-                              {step.tip.text}
-                            </Link>
-                          </>
-                        )}
-                      </Text>
-                    </Box>
-                    <Button
-                      size="sm"
-                      minW="160px"
-                      variant={done ? "outline" : "solid"}
-                      colorPalette={done ? "gray" : "blue"}
-                      onClick={() => {
-                        if (step.action === "upload-sheet-music") {
-                          setShowUploadSheet(true);
-                        } else if (step.action === "upload-audio") {
-                          setShowUploadAudio(true);
-                        } else {
-                          router.push(`${basePath}/${step.action}`);
-                        }
-                      }}
-                    >
-                      {done ? "Edit" : step.actionLabel}
-                    </Button>
-                  </Flex>
+
+                    {/* Inline AI actions for this step */}
+                    {hasAi && (
+                      <Box
+                        px={4}
+                        pb={4}
+                        pt={2}
+                        bg={done ? "green.50" : "gray.50"}
+                        border="1px solid"
+                        borderColor={done ? "green.100" : "gray.100"}
+                        borderTopWidth={0}
+                        borderRadius="0 0 lg lg"
+                        ml="48px"
+                      >
+                        {renderStepExtra(step.key)}
+                      </Box>
+                    )}
+                  </Box>
                 );
               })}
             </VStack>
           </Card.Body>
         </Card.Root>
       )}
-
-      {/* AI Processing Card */}
-      {(() => {
-        const fullMix = arrangement.audioAssets.find(
-          (a) => a.assetRole === "full_mix"
-        );
-        const stems = arrangement.audioAssets.filter(
-          (a) => a.assetRole === "stem"
-        );
-        const hasStems = stems.length > 0;
-        const showStemButton = fullMix && !hasStems && !isStemProcessing;
-        const showStemMapping =
-          hasStems && arrangement.parts.length === 0;
-
-        // Initialize stem mappings when stems appear
-        if (
-          hasStems &&
-          Object.keys(stemMappings).length === 0 &&
-          arrangement.parts.length === 0
-        ) {
-          const initial: Record<
-            string,
-            { checked: boolean; instrumentName: string }
-          > = {};
-          for (const stem of stems) {
-            if (stem.stemName) {
-              initial[stem.id] = {
-                checked: true,
-                instrumentName:
-                  stem.stemName.charAt(0).toUpperCase() +
-                  stem.stemName.slice(1),
-              };
-            }
-          }
-          if (Object.keys(initial).length > 0) {
-            setStemMappings(initial);
-          }
-        }
-
-        if (!fullMix && !hasStems) return null;
-
-        return (
-          <Card.Root mb={8} bg="white" borderWidth="1px" borderColor="purple.100">
-            <Card.Body p={6}>
-              <Flex align="center" gap={2} mb={1}>
-                <Heading size="md" color="gray.800">
-                  AI Audio Processing
-                </Heading>
-                <Badge colorPalette="purple" variant="subtle" fontSize="xs">
-                  AI
-                </Badge>
-              </Flex>
-              <Text fontSize="sm" color="gray.500" mb={5}>
-                Automatically separate stems, generate sheet music, and create
-                sync maps from your audio.
-              </Text>
-
-              {/* Stem Separation */}
-              {showStemButton && (
-                <Flex
-                  align="center"
-                  p={4}
-                  borderRadius="lg"
-                  bg="purple.50"
-                  border="1px solid"
-                  borderColor="purple.100"
-                  mb={3}
-                >
-                  <Box flex={1}>
-                    <Text fontWeight="semibold" fontSize="sm" color="gray.800">
-                      Separate Stems
-                    </Text>
-                    <Text fontSize="xs" color="gray.500">
-                      Split your full mix into vocals, drums, bass, and other
-                      using AI (Demucs)
-                    </Text>
-                  </Box>
-                  <Button
-                    size="sm"
-                    colorPalette="purple"
-                    onClick={() => startStemSeparation(fullMix.id, "stem_separation")}
-                  >
-                    Separate Stems
-                  </Button>
-                </Flex>
-              )}
-
-              {/* Processing Status */}
-              {isStemProcessing && (
-                <Flex
-                  align="center"
-                  p={4}
-                  borderRadius="lg"
-                  bg="blue.50"
-                  border="1px solid"
-                  borderColor="blue.100"
-                  gap={3}
-                  mb={3}
-                >
-                  <Spinner size="sm" color="blue.500" />
-                  <Box>
-                    <Text fontWeight="semibold" fontSize="sm" color="blue.700">
-                      Processing stems...
-                    </Text>
-                    <Text fontSize="xs" color="blue.500">
-                      This usually takes 1-3 minutes. You can leave this page
-                      and come back.
-                    </Text>
-                  </Box>
-                </Flex>
-              )}
-
-              {/* Processing Error */}
-              {stemProcessingError && (
-                <Flex
-                  align="center"
-                  p={4}
-                  borderRadius="lg"
-                  bg="red.50"
-                  border="1px solid"
-                  borderColor="red.100"
-                  mb={3}
-                >
-                  <Box flex={1}>
-                    <Text fontWeight="semibold" fontSize="sm" color="red.700">
-                      Processing failed
-                    </Text>
-                    <Text fontSize="xs" color="red.500">
-                      {stemProcessingError}
-                    </Text>
-                  </Box>
-                  {fullMix && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      colorPalette="red"
-                      onClick={() =>
-                        startStemSeparation(fullMix.id, "stem_separation")
-                      }
-                    >
-                      Retry
-                    </Button>
-                  )}
-                </Flex>
-              )}
-
-              {/* Stems Complete */}
-              {hasStems && !showStemMapping && (
-                <Flex
-                  align="center"
-                  p={4}
-                  borderRadius="lg"
-                  bg="green.50"
-                  border="1px solid"
-                  borderColor="green.100"
-                  mb={3}
-                >
-                  <Flex
-                    w="36px"
-                    h="36px"
-                    borderRadius="full"
-                    bg="green.100"
-                    align="center"
-                    justify="center"
-                    flexShrink={0}
-                    mr={4}
-                    fontSize="md"
-                  >
-                    ✓
-                  </Flex>
-                  <Box>
-                    <Text fontWeight="semibold" fontSize="sm" color="green.700">
-                      {stems.length} stems separated
-                    </Text>
-                    <Text fontSize="xs" color="gray.500">
-                      {stems.map((s) => s.stemName).join(", ")}
-                    </Text>
-                  </Box>
-                </Flex>
-              )}
-
-              {/* Beat Detection / Sync Map Generation */}
-              {fullMix && !hasSyncMap && !isBeatProcessing && (
-                <Flex
-                  align="center"
-                  p={4}
-                  borderRadius="lg"
-                  bg="purple.50"
-                  border="1px solid"
-                  borderColor="purple.100"
-                  mb={3}
-                >
-                  <Box flex={1}>
-                    <Text fontWeight="semibold" fontSize="sm" color="gray.800">
-                      Auto-Generate Sync Map
-                    </Text>
-                    <Text fontSize="xs" color="gray.500">
-                      Detect beats in your audio and create a bar-to-timestamp
-                      mapping for real-time score following
-                    </Text>
-                  </Box>
-                  <Button
-                    size="sm"
-                    colorPalette="purple"
-                    onClick={() => startBeatDetection(fullMix.id, "beat_detection")}
-                  >
-                    Generate Sync Map
-                  </Button>
-                </Flex>
-              )}
-
-              {isBeatProcessing && (
-                <Flex
-                  align="center"
-                  p={4}
-                  borderRadius="lg"
-                  bg="blue.50"
-                  border="1px solid"
-                  borderColor="blue.100"
-                  gap={3}
-                  mb={3}
-                >
-                  <Spinner size="sm" color="blue.500" />
-                  <Box>
-                    <Text fontWeight="semibold" fontSize="sm" color="blue.700">
-                      Generating sync map...
-                    </Text>
-                    <Text fontSize="xs" color="blue.500">
-                      Detecting beats and mapping bar positions. Usually takes under a minute.
-                    </Text>
-                  </Box>
-                </Flex>
-              )}
-
-              {beatProcessingError && (
-                <Flex
-                  align="center"
-                  p={4}
-                  borderRadius="lg"
-                  bg="red.50"
-                  border="1px solid"
-                  borderColor="red.100"
-                  mb={3}
-                >
-                  <Box flex={1}>
-                    <Text fontWeight="semibold" fontSize="sm" color="red.700">
-                      Beat detection failed
-                    </Text>
-                    <Text fontSize="xs" color="red.500">
-                      {beatProcessingError}
-                    </Text>
-                  </Box>
-                  {fullMix && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      colorPalette="red"
-                      onClick={() => startBeatDetection(fullMix.id, "beat_detection")}
-                    >
-                      Retry
-                    </Button>
-                  )}
-                </Flex>
-              )}
-
-              {fullMix && hasSyncMap && (
-                <Flex
-                  align="center"
-                  p={4}
-                  borderRadius="lg"
-                  bg="green.50"
-                  border="1px solid"
-                  borderColor="green.100"
-                  mb={3}
-                >
-                  <Flex
-                    w="36px"
-                    h="36px"
-                    borderRadius="full"
-                    bg="green.100"
-                    align="center"
-                    justify="center"
-                    flexShrink={0}
-                    mr={4}
-                    fontSize="md"
-                  >
-                    ✓
-                  </Flex>
-                  <Box flex={1}>
-                    <Text fontWeight="semibold" fontSize="sm" color="green.700">
-                      Sync map created
-                    </Text>
-                    <Text fontSize="xs" color="gray.500">
-                      AI-generated bar-to-timestamp mapping is active
-                    </Text>
-                  </Box>
-                  <Badge colorPalette="purple" variant="subtle" fontSize="xs">
-                    AI-Generated
-                  </Badge>
-                </Flex>
-              )}
-
-              {/* Sheet Music Transcription */}
-              {(() => {
-                // Find stems that have a matching part but no sheet music yet
-                const stemsForTranscription = stems.filter((stem) => {
-                  if (!stem.stemName) return false;
-                  const matchingPart = arrangement.parts.find((p) =>
-                    p.instrumentName.toLowerCase().includes(stem.stemName!.toLowerCase())
-                  );
-                  return matchingPart && matchingPart.sheetMusicAssets.length === 0;
-                });
-
-                if (stemsForTranscription.length === 0 && !isTranscribing && !transcriptionError) {
-                  return null;
-                }
-
-                return (
-                  <>
-                    {!isTranscribing && !transcriptionError && stemsForTranscription.length > 0 && (
-                      <Flex
-                        align="center"
-                        p={4}
-                        borderRadius="lg"
-                        bg="purple.50"
-                        border="1px solid"
-                        borderColor="purple.100"
-                        mb={3}
-                      >
-                        <Box flex={1}>
-                          <Text fontWeight="semibold" fontSize="sm" color="gray.800">
-                            Generate Sheet Music
-                          </Text>
-                          <Text fontSize="xs" color="gray.500">
-                            Transcribe {stemsForTranscription.map((s) => s.stemName).join(", ")}{" "}
-                            stem{stemsForTranscription.length > 1 ? "s" : ""} to MusicXML using AI
-                          </Text>
-                        </Box>
-                        <Button
-                          size="sm"
-                          colorPalette="purple"
-                          onClick={() => {
-                            for (const stem of stemsForTranscription) {
-                              startTranscription(stem.id, "transcription");
-                            }
-                          }}
-                        >
-                          Transcribe{stemsForTranscription.length > 1 ? " All" : ""}
-                        </Button>
-                      </Flex>
-                    )}
-
-                    {isTranscribing && (
-                      <Flex
-                        align="center"
-                        p={4}
-                        borderRadius="lg"
-                        bg="blue.50"
-                        border="1px solid"
-                        borderColor="blue.100"
-                        gap={3}
-                        mb={3}
-                      >
-                        <Spinner size="sm" color="blue.500" />
-                        <Box>
-                          <Text fontWeight="semibold" fontSize="sm" color="blue.700">
-                            Transcribing audio to sheet music...
-                          </Text>
-                          <Text fontSize="xs" color="blue.500">
-                            AI is detecting notes and generating MusicXML. This may take 2-5 minutes.
-                          </Text>
-                        </Box>
-                      </Flex>
-                    )}
-
-                    {transcriptionError && (
-                      <Flex
-                        align="center"
-                        p={4}
-                        borderRadius="lg"
-                        bg="red.50"
-                        border="1px solid"
-                        borderColor="red.100"
-                        mb={3}
-                      >
-                        <Box flex={1}>
-                          <Text fontWeight="semibold" fontSize="sm" color="red.700">
-                            Transcription failed
-                          </Text>
-                          <Text fontSize="xs" color="red.500">
-                            {transcriptionError}
-                          </Text>
-                        </Box>
-                      </Flex>
-                    )}
-                  </>
-                );
-              })()}
-
-              {/* Stem-to-Part Mapping Checklist */}
-              {showStemMapping && Object.keys(stemMappings).length > 0 && (
-                <Box
-                  p={4}
-                  borderRadius="lg"
-                  bg="gray.50"
-                  border="1px solid"
-                  borderColor="gray.100"
-                >
-                  <Text fontWeight="semibold" fontSize="sm" color="gray.800" mb={3}>
-                    Map Stems to Parts
-                  </Text>
-                  <Text fontSize="xs" color="gray.500" mb={3}>
-                    Select which stems should become instrument parts. You can
-                    rename them to match your arrangement.
-                  </Text>
-                  <VStack align="stretch" gap={2}>
-                    {stems.map((stem) => {
-                      const mapping = stemMappings[stem.id];
-                      if (!mapping) return null;
-                      return (
-                        <Flex
-                          key={stem.id}
-                          align="center"
-                          gap={3}
-                          p={3}
-                          bg="white"
-                          borderRadius="md"
-                          border="1px solid"
-                          borderColor="gray.100"
-                        >
-                          <Checkbox.Root
-                            checked={mapping.checked}
-                            onCheckedChange={(e) =>
-                              setStemMappings((prev) => ({
-                                ...prev,
-                                [stem.id]: {
-                                  ...prev[stem.id],
-                                  checked: !!e.checked,
-                                },
-                              }))
-                            }
-                          >
-                            <Checkbox.HiddenInput />
-                            <Checkbox.Control />
-                          </Checkbox.Root>
-                          <Badge colorPalette="purple" variant="subtle" fontSize="xs">
-                            {stem.stemName}
-                          </Badge>
-                          <Input
-                            size="sm"
-                            flex={1}
-                            value={mapping.instrumentName}
-                            onChange={(e) =>
-                              setStemMappings((prev) => ({
-                                ...prev,
-                                [stem.id]: {
-                                  ...prev[stem.id],
-                                  instrumentName: e.target.value,
-                                },
-                              }))
-                            }
-                            placeholder="Instrument name"
-                          />
-                        </Flex>
-                      );
-                    })}
-                  </VStack>
-                  <Flex justify="flex-end" mt={3}>
-                    <Button
-                      size="sm"
-                      colorPalette="purple"
-                      onClick={handleCreatePartsFromStems}
-                      loading={createPartMutation.isPending}
-                      disabled={
-                        !Object.values(stemMappings).some(
-                          (m) => m.checked && m.instrumentName.trim()
-                        )
-                      }
-                    >
-                      Create Parts from Stems
-                    </Button>
-                  </Flex>
-                </Box>
-              )}
-            </Card.Body>
-          </Card.Root>
-        );
-      })()}
 
       <SimpleGrid columns={{ base: 1, lg: 2 }} gap={6}>
         {/* Parts Overview */}

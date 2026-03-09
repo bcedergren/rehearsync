@@ -73,17 +73,21 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
   );
 
   try {
-    let prediction;
+    let prediction: { id: string };
     switch (jobType) {
       case "stem_separation":
         prediction = await createStemSeparationPrediction(audioUrl);
         break;
       case "transcription":
-        prediction = await createTranscriptionPrediction(audioUrl);
-        break;
+        // Throws — temporarily unavailable (basic-pitch removed from Replicate)
+        await createTranscriptionPrediction(audioUrl);
+        throw new Error("unreachable");
       case "beat_detection":
-        prediction = await createBeatDetectionPrediction(audioUrl);
-        break;
+        // Throws — temporarily unavailable (basic-pitch removed from Replicate)
+        await createBeatDetectionPrediction(audioUrl);
+        throw new Error("unreachable");
+      default:
+        throw new Error(`Unknown job type: ${jobType}`);
     }
 
     await processingService.updateJobStatus(job.id, "running", {
