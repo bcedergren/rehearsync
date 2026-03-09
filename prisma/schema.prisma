@@ -156,6 +156,7 @@ model Arrangement {
   syncMaps           SyncMap[]
   rehearsalSessions  RehearsalSession[]
   transportStates    TransportState[]
+  processingJobs     ProcessingJob[]
 
   @@unique([songId, name, versionLabel])
   @@index([songId, status])
@@ -238,9 +239,10 @@ model AudioAsset {
   notes           String?
   createdAt       DateTime @default(now()) @map("created_at")
 
-  arrangement   Arrangement @relation(fields: [arrangementId], references: [id], onDelete: Cascade)
-  storageObject StorageObject @relation(fields: [storageObjectId], references: [id], onDelete: Restrict)
-  syncMaps      SyncMap[]
+  arrangement    Arrangement    @relation(fields: [arrangementId], references: [id], onDelete: Cascade)
+  storageObject  StorageObject  @relation(fields: [storageObjectId], references: [id], onDelete: Restrict)
+  syncMaps       SyncMap[]
+  processingJobs ProcessingJob[]
 
   @@unique([arrangementId, assetRole, stemName, versionNum])
   @@index([arrangementId, assetRole])
@@ -316,6 +318,34 @@ model SyncMapPoint {
   @@unique([syncMapId, barNumber, beatNumber, tickOffset])
   @@index([syncMapId, barNumber])
   @@map("sync_map_points")
+}
+
+// ─── AI Processing ──────────────────────────────────────────────
+
+model ProcessingJob {
+  id              String    @id @default(uuid())
+  arrangementId   String    @map("arrangement_id")
+  audioAssetId    String?   @map("audio_asset_id")
+  jobType         String    @map("job_type") // stem_separation | transcription | beat_detection
+  status          String    @default("pending") // pending | running | completed | failed
+  provider        String    @default("replicate") // replicate | openai
+  externalId      String?   @map("external_id") // Replicate prediction ID
+  inputPayload    Json?     @map("input_payload")
+  outputPayload   Json?     @map("output_payload")
+  errorMessage    String?   @map("error_message")
+  parentJobId     String?   @map("parent_job_id")
+  startedAt       DateTime? @map("started_at")
+  completedAt     DateTime? @map("completed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  arrangement Arrangement    @relation(fields: [arrangementId], references: [id], onDelete: Cascade)
+  audioAsset  AudioAsset?    @relation(fields: [audioAssetId], references: [id], onDelete: SetNull)
+  parentJob   ProcessingJob? @relation("JobChain", fields: [parentJobId], references: [id])
+  childJobs   ProcessingJob[] @relation("JobChain")
+
+  @@index([arrangementId, status])
+  @@index([externalId])
+  @@map("processing_jobs")
 }
 
 // ─── Session & Transport (Phase 2) ─────────────────────────────

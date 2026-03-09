@@ -21,12 +21,14 @@ import {
   Checkbox,
 } from "@chakra-ui/react";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useApiQuery, useApiMutation } from "@/hooks/useApi";
 import { useUpload } from "@/hooks/useUpload";
+import { useProcessingJob } from "@/hooks/useProcessingJob";
 import { FileDropzone } from "@/components/uploads/FileDropzone";
 import { SheetMusicViewer } from "@/components/sheet-music/SheetMusicViewer";
 import { AudioPlayer } from "@/components/audio/AudioPlayer";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface Part {
   id: string;
@@ -97,7 +99,7 @@ const STEP_CONFIG = [
     key: "audio",
     label: "Upload Audio",
     description: "Add a backing track, click, or stems",
-    tip: { text: "Need stem separation? Try moises.ai", url: "https://moises.ai" },
+    tip: { text: "Or use AI Processing below to auto-separate stems", url: "#ai-processing" },
     icon: "🎧",
     action: "upload-audio",
     actionLabel: "Upload Audio",
@@ -242,6 +244,49 @@ export default function ArrangementDetailPage() {
       assetRole,
       ...(assetRole === "stem" && stemName ? { stemName } : {}),
     });
+  }
+
+  // AI Processing state
+  const queryClient = useQueryClient();
+  const handleProcessingComplete = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["arrangement", arrangementId] });
+    queryClient.invalidateQueries({ queryKey: ["readiness", arrangementId] });
+  }, [queryClient, arrangementId]);
+
+  const {
+    isProcessing: isStemProcessing,
+    error: stemProcessingError,
+    startJob: startStemSeparation,
+  } = useProcessingJob(handleProcessingComplete);
+
+  // Stem-to-Part mapping state
+  const [stemMappings, setStemMappings] = useState<
+    Record<string, { checked: boolean; instrumentName: string }>
+  >({});
+
+  const createPartMutation = useApiMutation(
+    `/arrangements/${arrangementId}/parts`,
+    "POST",
+    {
+      invalidateKeys: [
+        ["arrangement", arrangementId],
+        ["parts", arrangementId],
+        ["readiness", arrangementId],
+      ],
+    }
+  );
+
+  async function handleCreatePartsFromStems() {
+    const entries = Object.entries(stemMappings).filter(
+      ([, v]) => v.checked && v.instrumentName.trim()
+    );
+    for (const [, mapping] of entries) {
+      createPartMutation.mutate({
+        instrumentName: mapping.instrumentName,
+        isRequired: true,
+      });
+    }
+    setStemMappings({});
   }
 
   if (isLoading || !arrangement) {
@@ -398,6 +443,276 @@ export default function ArrangementDetailPage() {
           </Card.Body>
         </Card.Root>
       )}
+
+      {/* AI Processing Card */}
+      {(() => {
+        const fullMix = arrangement.audioAssets.find(
+          (a) => a.assetRole === "full_mix"
+        );
+        const stems = arrangement.audioAssets.filter(
+          (a) => a.assetRole === "stem"
+        );
+        const hasStems = stems.length > 0;
+        const showStemButton = fullMix && !hasStems && !isStemProcessing;
+        const showStemMapping =
+          hasStems && arrangement.parts.length === 0;
+
+        // Initialize stem mappings when stems appear
+        if (
+          hasStems &&
+          Object.keys(stemMappings).length === 0 &&
+          arrangement.parts.length === 0
+        ) {
+          const initial: Record<
+            string,
+            { checked: boolean; instrumentName: string }
+          > = {};
+          for (const stem of stems) {
+            if (stem.stemName) {
+              initial[stem.id] = {
+                checked: true,
+                instrumentName:
+                  stem.stemName.charAt(0).toUpperCase() +
+                  stem.stemName.slice(1),
+              };
+            }
+          }
+          if (Object.keys(initial).length > 0) {
+            setStemMappings(initial);
+          }
+        }
+
+        if (!fullMix && !hasStems) return null;
+
+        return (
+          <Card.Root mb={8} bg="white" borderWidth="1px" borderColor="purple.100">
+            <Card.Body p={6}>
+              <Flex align="center" gap={2} mb={1}>
+                <Heading size="md" color="gray.800">
+                  AI Audio Processing
+                </Heading>
+                <Badge colorPalette="purple" variant="subtle" fontSize="xs">
+                  AI
+                </Badge>
+              </Flex>
+              <Text fontSize="sm" color="gray.500" mb={5}>
+                Automatically separate stems, generate sheet music, and create
+                sync maps from your audio.
+              </Text>
+
+              {/* Stem Separation */}
+              {showStemButton && (
+                <Flex
+                  align="center"
+                  p={4}
+                  borderRadius="lg"
+                  bg="purple.50"
+                  border="1px solid"
+                  borderColor="purple.100"
+                  mb={3}
+                >
+                  <Box flex={1}>
+                    <Text fontWeight="semibold" fontSize="sm" color="gray.800">
+                      Separate Stems
+                    </Text>
+                    <Text fontSize="xs" color="gray.500">
+                      Split your full mix into vocals, drums, bass, and other
+                      using AI (Demucs)
+                    </Text>
+                  </Box>
+                  <Button
+                    size="sm"
+                    colorPalette="purple"
+                    onClick={() => startStemSeparation(fullMix.id, "stem_separation")}
+                  >
+                    Separate Stems
+                  </Button>
+                </Flex>
+              )}
+
+              {/* Processing Status */}
+              {isStemProcessing && (
+                <Flex
+                  align="center"
+                  p={4}
+                  borderRadius="lg"
+                  bg="blue.50"
+                  border="1px solid"
+                  borderColor="blue.100"
+                  gap={3}
+                  mb={3}
+                >
+                  <Spinner size="sm" color="blue.500" />
+                  <Box>
+                    <Text fontWeight="semibold" fontSize="sm" color="blue.700">
+                      Processing stems...
+                    </Text>
+                    <Text fontSize="xs" color="blue.500">
+                      This usually takes 1-3 minutes. You can leave this page
+                      and come back.
+                    </Text>
+                  </Box>
+                </Flex>
+              )}
+
+              {/* Processing Error */}
+              {stemProcessingError && (
+                <Flex
+                  align="center"
+                  p={4}
+                  borderRadius="lg"
+                  bg="red.50"
+                  border="1px solid"
+                  borderColor="red.100"
+                  mb={3}
+                >
+                  <Box flex={1}>
+                    <Text fontWeight="semibold" fontSize="sm" color="red.700">
+                      Processing failed
+                    </Text>
+                    <Text fontSize="xs" color="red.500">
+                      {stemProcessingError}
+                    </Text>
+                  </Box>
+                  {fullMix && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      colorPalette="red"
+                      onClick={() =>
+                        startStemSeparation(fullMix.id, "stem_separation")
+                      }
+                    >
+                      Retry
+                    </Button>
+                  )}
+                </Flex>
+              )}
+
+              {/* Stems Complete */}
+              {hasStems && !showStemMapping && (
+                <Flex
+                  align="center"
+                  p={4}
+                  borderRadius="lg"
+                  bg="green.50"
+                  border="1px solid"
+                  borderColor="green.100"
+                  mb={3}
+                >
+                  <Flex
+                    w="36px"
+                    h="36px"
+                    borderRadius="full"
+                    bg="green.100"
+                    align="center"
+                    justify="center"
+                    flexShrink={0}
+                    mr={4}
+                    fontSize="md"
+                  >
+                    ✓
+                  </Flex>
+                  <Box>
+                    <Text fontWeight="semibold" fontSize="sm" color="green.700">
+                      {stems.length} stems separated
+                    </Text>
+                    <Text fontSize="xs" color="gray.500">
+                      {stems.map((s) => s.stemName).join(", ")}
+                    </Text>
+                  </Box>
+                </Flex>
+              )}
+
+              {/* Stem-to-Part Mapping Checklist */}
+              {showStemMapping && Object.keys(stemMappings).length > 0 && (
+                <Box
+                  p={4}
+                  borderRadius="lg"
+                  bg="gray.50"
+                  border="1px solid"
+                  borderColor="gray.100"
+                >
+                  <Text fontWeight="semibold" fontSize="sm" color="gray.800" mb={3}>
+                    Map Stems to Parts
+                  </Text>
+                  <Text fontSize="xs" color="gray.500" mb={3}>
+                    Select which stems should become instrument parts. You can
+                    rename them to match your arrangement.
+                  </Text>
+                  <VStack align="stretch" gap={2}>
+                    {stems.map((stem) => {
+                      const mapping = stemMappings[stem.id];
+                      if (!mapping) return null;
+                      return (
+                        <Flex
+                          key={stem.id}
+                          align="center"
+                          gap={3}
+                          p={3}
+                          bg="white"
+                          borderRadius="md"
+                          border="1px solid"
+                          borderColor="gray.100"
+                        >
+                          <Checkbox.Root
+                            checked={mapping.checked}
+                            onCheckedChange={(e) =>
+                              setStemMappings((prev) => ({
+                                ...prev,
+                                [stem.id]: {
+                                  ...prev[stem.id],
+                                  checked: !!e.checked,
+                                },
+                              }))
+                            }
+                          >
+                            <Checkbox.HiddenInput />
+                            <Checkbox.Control />
+                          </Checkbox.Root>
+                          <Badge colorPalette="purple" variant="subtle" fontSize="xs">
+                            {stem.stemName}
+                          </Badge>
+                          <Input
+                            size="sm"
+                            flex={1}
+                            value={mapping.instrumentName}
+                            onChange={(e) =>
+                              setStemMappings((prev) => ({
+                                ...prev,
+                                [stem.id]: {
+                                  ...prev[stem.id],
+                                  instrumentName: e.target.value,
+                                },
+                              }))
+                            }
+                            placeholder="Instrument name"
+                          />
+                        </Flex>
+                      );
+                    })}
+                  </VStack>
+                  <Flex justify="flex-end" mt={3}>
+                    <Button
+                      size="sm"
+                      colorPalette="purple"
+                      onClick={handleCreatePartsFromStems}
+                      loading={createPartMutation.isPending}
+                      disabled={
+                        !Object.values(stemMappings).some(
+                          (m) => m.checked && m.instrumentName.trim()
+                        )
+                      }
+                    >
+                      Create Parts from Stems
+                    </Button>
+                  </Flex>
+                </Box>
+              )}
+            </Card.Body>
+          </Card.Root>
+        );
+      })()}
 
       <SimpleGrid columns={{ base: 1, lg: 2 }} gap={6}>
         {/* Parts Overview */}

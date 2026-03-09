@@ -11,6 +11,7 @@ export interface TierLimits {
   allowSessions: boolean;
   allowTransportControls: boolean;
   allowSyncMaps: boolean;
+  allowAiProcessing: boolean;
 }
 
 export const TIER_LIMITS: Record<Tier, TierLimits> = {
@@ -25,6 +26,7 @@ export const TIER_LIMITS: Record<Tier, TierLimits> = {
     allowSessions: false,
     allowTransportControls: false,
     allowSyncMaps: false,
+    allowAiProcessing: false,
   },
   band: {
     maxBands: 1,
@@ -37,6 +39,7 @@ export const TIER_LIMITS: Record<Tier, TierLimits> = {
     allowSessions: false,
     allowTransportControls: false,
     allowSyncMaps: false,
+    allowAiProcessing: true,
   },
   agent: {
     maxBands: Infinity,
@@ -49,6 +52,7 @@ export const TIER_LIMITS: Record<Tier, TierLimits> = {
     allowSessions: true,
     allowTransportControls: true,
     allowSyncMaps: true,
+    allowAiProcessing: true,
   },
 };
 

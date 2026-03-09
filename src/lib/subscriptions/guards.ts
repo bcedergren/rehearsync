@@ -98,6 +98,7 @@ export async function requireFeature(
     | "allowSessions"
     | "allowTransportControls"
     | "allowSyncMaps"
+    | "allowAiProcessing"
   >
 ): Promise<void> {
   const tier = await getUserTier(userId);
@@ -112,13 +113,15 @@ export async function requireFeature(
     allowSessions: "Live rehearsal sessions",
     allowTransportControls: "Transport controls",
     allowSyncMaps: "Sync map editor",
+    allowAiProcessing: "AI audio processing",
   };
 
-  const requiredTier = feature.startsWith("allowSession") ||
-    feature === "allowTransportControls" ||
-    feature === "allowSyncMaps"
-    ? "agent"
-    : "band";
+  const agentOnlyFeatures = [
+    "allowSessions",
+    "allowTransportControls",
+    "allowSyncMaps",
+  ];
+  const requiredTier = agentOnlyFeatures.includes(feature) ? "agent" : "band";
 
   throw new TierLimitError(
     `${featureNames[feature] || feature} requires a ${requiredTier} plan or higher.`,
