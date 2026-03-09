@@ -156,10 +156,7 @@ export async function getReadiness(arrangementId: string) {
   );
 
   return {
-    isReady:
-      arrangement.status === "published" &&
-      allRequiredPartsHaveCharts &&
-      hasBackingTrack,
+    isReady: allRequiredPartsHaveCharts && hasBackingTrack,
     checks: {
       published: arrangement.status === "published",
       requiredPartsAssigned: allRequiredPartsHaveCharts,
