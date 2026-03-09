@@ -18,6 +18,7 @@ import {
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { useApiQuery, useApiMutation } from "@/hooks/useApi";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface SectionMarker {
   id: string;
@@ -58,6 +59,7 @@ export default function SectionsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
 
   // Edit state
   const [editingSection, setEditingSection] = useState<SectionMarker | null>(null);
@@ -86,6 +88,27 @@ export default function SectionsPage() {
       onSuccess: () => setEditingSection(null),
     }
   );
+
+  const queryClient = useQueryClient();
+
+  async function handleGenerate() {
+    setGenerating(true);
+    setErrorMsg(null);
+    try {
+      const res = await fetch(`/api/v1/arrangements/${arrangementId}/sections/generate`, {
+        method: "POST",
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error?.message || "Failed to generate sections");
+      }
+      queryClient.invalidateQueries({ queryKey: ["sections", arrangementId] });
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Failed to generate sections");
+    } finally {
+      setGenerating(false);
+    }
+  }
 
   function updateRow(index: number, field: keyof SectionRow, value: string) {
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, [field]: value } : r)));
@@ -152,19 +175,36 @@ export default function SectionsPage() {
       </Button>
       <Flex justify="space-between" align="center" mb={2}>
         <Heading size="lg">Section Markers</Heading>
-        {!showAdd && (
+        <Flex gap={2}>
+          {!showAdd && (
+            <Button
+              colorPalette="blue"
+              size="sm"
+              onClick={() => setShowAdd(true)}
+            >
+              Add Sections
+            </Button>
+          )}
           <Button
-            colorPalette="blue"
             size="sm"
-            onClick={() => setShowAdd(true)}
+            variant="outline"
+            onClick={handleGenerate}
+            loading={generating}
+            disabled={generating}
           >
-            Add Sections
+            AI Generate
           </Button>
-        )}
+        </Flex>
       </Flex>
       <Text fontSize="sm" color="gray.500" mb={6}>
         Define song sections like Intro, Verse, Chorus with bar numbers.
       </Text>
+
+      {errorMsg && !showAdd && (
+        <Box bg="red.50" border="1px solid" borderColor="red.200" borderRadius="md" p={3} mb={4}>
+          <Text fontSize="sm" color="red.600">{errorMsg}</Text>
+        </Box>
+      )}
 
       {/* Existing sections */}
       {sections && sections.length > 0 && (
