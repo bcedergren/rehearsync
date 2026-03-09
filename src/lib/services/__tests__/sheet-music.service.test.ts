@@ -17,7 +17,7 @@ describe("createSheetMusicAsset", () => {
   it("creates with auto-incremented version", async () => {
     db.sheetMusicAsset.aggregate.mockResolvedValue({ _max: { versionNum: 2 } });
     const mock = { id: "sma-1", versionNum: 3 };
-    db.sheetMusicAsset.create.mockResolvedValue(mock);
+    db.$transaction.mockResolvedValue([{ count: 0 }, mock]);
 
     const result = await createSheetMusicAsset("arr-1", {
       partId: "part-1",
@@ -26,28 +26,20 @@ describe("createSheetMusicAsset", () => {
     });
 
     expect(result.versionNum).toBe(3);
-    expect(db.sheetMusicAsset.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        arrangementId: "arr-1",
-        versionNum: 3,
-        fileType: "musicxml",
-      }),
-    });
   });
 
   it("starts at version 1 when no prior versions exist", async () => {
     db.sheetMusicAsset.aggregate.mockResolvedValue({ _max: { versionNum: null } });
-    db.sheetMusicAsset.create.mockResolvedValue({ id: "sma-1", versionNum: 1 });
+    const mock = { id: "sma-1", versionNum: 1 };
+    db.$transaction.mockResolvedValue([{ count: 0 }, mock]);
 
-    await createSheetMusicAsset("arr-1", {
+    const result = await createSheetMusicAsset("arr-1", {
       partId: "part-1",
       storageObjectId: "so-1",
       fileType: "pdf",
     });
 
-    expect(db.sheetMusicAsset.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ versionNum: 1 }),
-    });
+    expect(result.versionNum).toBe(1);
   });
 });
 

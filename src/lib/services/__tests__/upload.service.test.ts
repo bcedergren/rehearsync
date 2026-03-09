@@ -1,13 +1,13 @@
 jest.mock("@/lib/prisma", () => require("@/lib/__mocks__/prisma"));
-jest.mock("@/lib/local-storage", () => ({
-  saveFile: jest.fn().mockResolvedValue(undefined),
+jest.mock("@/lib/supabase-storage", () => ({
+  uploadBuffer: jest.fn().mockResolvedValue(undefined),
 }));
 jest.mock("uuid", () => ({
   v4: () => "test-uuid-1234",
 }));
 
 import { prisma } from "@/lib/prisma";
-import { saveFile } from "@/lib/local-storage";
+import { uploadBuffer } from "@/lib/supabase-storage";
 import { uploadFile } from "../upload.service";
 
 const db = prisma as any;
@@ -31,13 +31,15 @@ describe("uploadFile", () => {
 
     expect(result.storageObjectId).toBe("so-1");
     expect(result.objectKey).toBe("bands/band-1/sheet_music/test-uuid-1234.pdf");
-    expect(saveFile).toHaveBeenCalledWith(
+    expect(uploadBuffer).toHaveBeenCalledWith(
+      "rehearsync-assets",
       "bands/band-1/sheet_music/test-uuid-1234.pdf",
-      data
+      data,
+      "application/pdf"
     );
     expect(db.storageObject.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        bucket: "local",
+        bucket: "rehearsync-assets",
         mimeType: "application/pdf",
         sizeBytes: BigInt(data.length),
         uploadedByMemberId: "member-1",
@@ -58,9 +60,11 @@ describe("uploadFile", () => {
       data
     );
 
-    expect(saveFile).toHaveBeenCalledWith(
+    expect(uploadBuffer).toHaveBeenCalledWith(
+      "rehearsync-assets",
       "bands/band-1/audio/test-uuid-1234.mp3",
-      data
+      data,
+      "audio/mpeg"
     );
   });
 

@@ -36,5 +36,6 @@ export const prisma = {
   sessionParticipant: createModelMock(),
   transportState: createModelMock(),
   transportEvent: createModelMock(),
+  processingJob: createModelMock(),
   $transaction: jest.fn(),
 };

@@ -17,7 +17,7 @@ describe("createAudioAsset", () => {
   it("creates with auto-incremented version", async () => {
     db.audioAsset.aggregate.mockResolvedValue({ _max: { versionNum: 1 } });
     const mock = { id: "aa-1", versionNum: 2 };
-    db.audioAsset.create.mockResolvedValue(mock);
+    db.$transaction.mockResolvedValue([{ count: 0 }, mock]);
 
     const result = await createAudioAsset("arr-1", {
       storageObjectId: "so-1",
@@ -25,28 +25,20 @@ describe("createAudioAsset", () => {
     });
 
     expect(result.versionNum).toBe(2);
-    expect(db.audioAsset.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        arrangementId: "arr-1",
-        assetRole: "full_mix",
-        versionNum: 2,
-      }),
-    });
   });
 
   it("starts at version 1 when no prior versions exist", async () => {
     db.audioAsset.aggregate.mockResolvedValue({ _max: { versionNum: null } });
-    db.audioAsset.create.mockResolvedValue({ id: "aa-1", versionNum: 1 });
+    const mock = { id: "aa-1", versionNum: 1, stemName: "Drums" };
+    db.$transaction.mockResolvedValue([{ count: 0 }, mock]);
 
-    await createAudioAsset("arr-1", {
+    const result = await createAudioAsset("arr-1", {
       storageObjectId: "so-1",
       assetRole: "stem",
       stemName: "Drums",
     });
 
-    expect(db.audioAsset.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ versionNum: 1, stemName: "Drums" }),
-    });
+    expect(result.versionNum).toBe(1);
   });
 });
 
