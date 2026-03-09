@@ -82,9 +82,8 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         prediction = await createTranscriptionPrediction(audioUrl);
         break;
       case "beat_detection":
-        // Throws — temporarily unavailable (basic-pitch removed from Replicate)
-        await createBeatDetectionPrediction(audioUrl);
-        throw new Error("unreachable");
+        prediction = await createBeatDetectionPrediction(audioUrl);
+        break;
       default:
         throw new Error(`Unknown job type: ${jobType}`);
     }

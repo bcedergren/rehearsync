@@ -263,54 +263,66 @@ async function handleStemSeparation(
 
 async function handleBeatDetection(
   job: Record<string, unknown>,
-  output: Record<string, unknown>
+  output: unknown
 ) {
   const arrangementId = job.arrangement_id as string;
   const audioAssetId = job.audio_asset_id as string;
 
-  // Basic Pitch returns note_events (with onset times) and midi_file
-  // We use note onsets to estimate bar boundaries
-  const noteEvents = output.note_events as number[][] | undefined;
-
-  if (!noteEvents || noteEvents.length === 0) {
-    throw new Error("No note events returned from basic-pitch");
+  // essentia-bpm returns a URL to a markdown file containing "Estimated BPM: <number>"
+  const outputUrl = typeof output === "string" ? output : null;
+  if (!outputUrl) {
+    throw new Error("No output URL returned from essentia-bpm");
   }
 
-  // Extract onset times (first element of each event array)
-  // Basic Pitch note_events format: [start_time_s, end_time_s, pitch, velocity, [optional]]
-  const onsetTimesMs = noteEvents
-    .map((event) => Math.round(event[0] * 1000))
-    .sort((a, b) => a - b);
+  // Fetch and parse BPM from the output markdown
+  const bpmResponse = await fetch(outputUrl);
+  if (!bpmResponse.ok) {
+    throw new Error(`Failed to fetch BPM result: ${bpmResponse.status}`);
+  }
+  const bpmText = await bpmResponse.text();
+  const bpmMatch = bpmText.match(/Estimated BPM:\s*([\d.]+)/);
+  if (!bpmMatch) {
+    throw new Error(`Could not parse BPM from output: ${bpmText}`);
+  }
 
-  // Estimate tempo from onset intervals
-  const intervals: number[] = [];
-  for (let i = 1; i < Math.min(onsetTimesMs.length, 200); i++) {
-    const diff = onsetTimesMs[i] - onsetTimesMs[i - 1];
-    if (diff > 50 && diff < 2000) {
-      intervals.push(diff);
+  const estimatedBpm = Math.round(parseFloat(bpmMatch[1]));
+  if (estimatedBpm < 20 || estimatedBpm > 300) {
+    throw new Error(`Estimated BPM ${estimatedBpm} is outside reasonable range (20-300)`);
+  }
+
+  // Get audio duration from the database
+  const { data: audioAsset } = await supabase
+    .from("audio_assets")
+    .select("duration_ms")
+    .eq("id", audioAssetId)
+    .single();
+
+  let durationMs = audioAsset?.duration_ms as number | null;
+
+  // Fallback: if duration wasn't captured at upload, estimate from the audio file size
+  // MP3 at ~192kbps ≈ 24000 bytes/sec; this is a rough estimate but sufficient for bar grid
+  if (!durationMs || durationMs <= 0) {
+    const { data: storageObj } = await supabase
+      .from("audio_assets")
+      .select("storage_objects!storage_object_id ( object_key, size_bytes )")
+      .eq("id", audioAssetId)
+      .single();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sizeBytes = (storageObj as any)?.storage_objects?.size_bytes as number | null;
+    if (sizeBytes && sizeBytes > 0) {
+      // Rough estimate: 192kbps MP3 = 24000 bytes/sec
+      durationMs = Math.round((sizeBytes / 24000) * 1000);
+      console.warn(`Audio asset ${audioAssetId} missing duration_ms, estimated ${durationMs}ms from file size`);
+    } else {
+      throw new Error("Audio asset has no duration and file size is unknown — cannot calculate bar boundaries");
     }
   }
 
-  // Find the most common interval cluster (likely the beat)
-  intervals.sort((a, b) => a - b);
-  const medianInterval = intervals[Math.floor(intervals.length / 2)] || 500;
-
-  // Estimate beat duration — cluster around the median
-  const nearMedian = intervals.filter(
-    (i) => Math.abs(i - medianInterval) < medianInterval * 0.3
-  );
-  const avgBeatMs =
-    nearMedian.length > 0
-      ? Math.round(nearMedian.reduce((a, b) => a + b, 0) / nearMedian.length)
-      : medianInterval;
-
   // Assume 4/4 time — bar = 4 beats
-  const barDurationMs = avgBeatMs * 4;
-  const estimatedBpm = Math.round(60000 / avgBeatMs);
-
-  // Determine song duration from last note event
-  const lastOnsetMs = onsetTimesMs[onsetTimesMs.length - 1];
-  const totalBars = Math.ceil(lastOnsetMs / barDurationMs);
+  const beatDurationMs = Math.round(60000 / estimatedBpm);
+  const barDurationMs = beatDurationMs * 4;
+  const totalBars = Math.ceil(durationMs / barDurationMs);
 
   // Get next version number for sync maps on this audio asset
   const { data: existingMaps } = await supabase
@@ -694,7 +706,7 @@ Deno.serve(async (req: Request) => {
           result = await handleTranscription(job, output);
           break;
         case "beat_detection":
-          result = await handleBeatDetection(job, output as Record<string, unknown>);
+          result = await handleBeatDetection(job, output);
           break;
         default:
           throw new Error(`Unknown job type: ${job.job_type}`);

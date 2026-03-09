@@ -7,6 +7,7 @@ const replicate = new Replicate({
 export const MODELS = {
   DEMUCS: "cjwbw/demucs:25a173108cff36ef9f80f854c162d01df9e6528be175794b81158fa03836d953",
   PIANO_TRANSCRIPTION: "bytedance/piano-transcription:8978296ce461e1fd8caae879d59063bc8009f57b734c1c8a2c7b19de0016fd35",
+  ESSENTIA_BPM: "mtg/essentia-bpm:b3045c359817fea53678791886d50aa3e3a995dc4796fe74db0de156d5074a43",
 } as const;
 
 function getWebhookUrl(): string {
@@ -43,12 +44,17 @@ export async function createTranscriptionPrediction(audioUrl: string) {
   return prediction;
 }
 
-export async function createBeatDetectionPrediction(_audioUrl: string) {
-  // spotify/basic-pitch was removed from Replicate.
-  // TODO: Replace with self-hosted basic-pitch or alternative model
-  throw new Error(
-    "Beat detection is temporarily unavailable — the basic-pitch model was removed from Replicate"
-  );
+export async function createBeatDetectionPrediction(audioUrl: string) {
+  const prediction = await replicate.predictions.create({
+    version: MODELS.ESSENTIA_BPM.split(":")[1],
+    input: {
+      audio: audioUrl,
+      algo_type: "deepsquare-k16",
+    },
+    webhook: getWebhookUrl(),
+    webhook_events_filter: ["completed"],
+  });
+  return prediction;
 }
 
 export { replicate };

@@ -23,9 +23,24 @@ export default function UploadAudioPage() {
   const arrangementId = params.arrangementId as string;
 
   const [file, setFile] = useState<File | null>(null);
+  const [durationMs, setDurationMs] = useState<number | null>(null);
   const [assetRole, setAssetRole] = useState("full_mix");
   const [stemName, setStemName] = useState("");
   const { isUploading, progress, error: uploadError, upload } = useUpload();
+
+  function handleFile(f: File) {
+    setFile(f);
+    // Extract audio duration from the file
+    const url = URL.createObjectURL(f);
+    const audio = new Audio(url);
+    audio.addEventListener("loadedmetadata", () => {
+      if (audio.duration && isFinite(audio.duration)) {
+        setDurationMs(Math.round(audio.duration * 1000));
+      }
+      URL.revokeObjectURL(url);
+    });
+    audio.addEventListener("error", () => URL.revokeObjectURL(url));
+  }
 
   const createAsset = useApiMutation(
     `/arrangements/${arrangementId}/audio`,
@@ -50,6 +65,7 @@ export default function UploadAudioPage() {
       storageObjectId,
       assetRole,
       ...(assetRole === "stem" && stemName ? { stemName } : {}),
+      ...(durationMs ? { durationMs } : {}),
     });
   }
 
@@ -63,7 +79,7 @@ export default function UploadAudioPage() {
         <VStack gap={4} align="stretch">
           <FileDropzone
             accept={[".wav", ".mp3", ".m4a", ".aac"]}
-            onFile={setFile}
+            onFile={handleFile}
             label="Drop audio file (WAV, MP3, M4A)"
           />
 
