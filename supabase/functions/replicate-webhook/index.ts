@@ -126,9 +126,11 @@ async function createStorageObject(
   mimeType: string,
   sizeBytes: number
 ) {
+  const id = crypto.randomUUID();
   const { data, error } = await supabase
     .from("storage_objects")
     .insert({
+      id,
       bucket,
       object_key: objectKey,
       original_file_name: originalFileName,
@@ -170,9 +172,11 @@ async function createAudioAsset(
     .eq("is_active", true);
 
   // Create new asset
+  const id = crypto.randomUUID();
   const { data, error } = await supabase
     .from("audio_assets")
     .insert({
+      id,
       arrangement_id: arrangementId,
       storage_object_id: storageObjectId,
       asset_role: assetRole,
