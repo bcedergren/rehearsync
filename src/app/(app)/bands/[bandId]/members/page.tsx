@@ -57,6 +57,9 @@ export default function MembersPage() {
   const [inviteLinkUrl, setInviteLinkUrl] = useState("");
   const [linkCopied, setLinkCopied] = useState(false);
   const [generatingLink, setGeneratingLink] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [emailSent, setEmailSent] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
 
   const { data: inviteLinks, refetch: refetchLinks } = useApiQuery<InviteLink[]>(
     ["inviteLinks", bandId],
@@ -80,6 +83,25 @@ export default function MembersPage() {
       // Silently fail — user can retry
     } finally {
       setGeneratingLink(false);
+    }
+  }
+
+  async function sendEmailInvite() {
+    if (!inviteEmail) return;
+    setSendingEmail(true);
+    try {
+      await apiFetch<InviteLink>(`/bands/${bandId}/invites`, {
+        method: "POST",
+        body: JSON.stringify({ expiresInHours: 168, email: inviteEmail }),
+      });
+      setEmailSent(true);
+      setInviteEmail("");
+      setTimeout(() => setEmailSent(false), 3000);
+      refetchLinks();
+    } catch {
+      // Silently fail
+    } finally {
+      setSendingEmail(false);
     }
   }
 
@@ -196,6 +218,32 @@ export default function MembersPage() {
               </Button>
             </Flex>
           )}
+
+          {/* Email invite */}
+          <Box borderTop="1px solid" borderColor="gray.100" pt={3} mt={3}>
+            <Text fontSize="xs" fontWeight="medium" color="gray.600" mb={2}>
+              Or invite by email
+            </Text>
+            <Flex gap={2}>
+              <Input
+                type="email"
+                size="sm"
+                placeholder="musician@example.com"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                flex={1}
+              />
+              <Button
+                size="sm"
+                colorPalette={emailSent ? "green" : "blue"}
+                onClick={sendEmailInvite}
+                loading={sendingEmail}
+                disabled={!inviteEmail}
+              >
+                {emailSent ? "Sent!" : "Send Invite"}
+              </Button>
+            </Flex>
+          </Box>
 
           {inviteLinks && inviteLinks.length > 0 && (
             <Box>

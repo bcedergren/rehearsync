@@ -147,6 +147,12 @@ export default function ArrangementDetailPage() {
     { invalidateKeys: [["arrangement", arrangementId], ["readiness", arrangementId]] }
   );
 
+  const archiveMutation = useApiMutation(
+    `/arrangements/${arrangementId}/archive`,
+    "POST",
+    { invalidateKeys: [["arrangement", arrangementId], ["readiness", arrangementId]] }
+  );
+
   // Preview sheet music state
   const [previewAsset, setPreviewAsset] = useState<{
     objectKey: string;
@@ -291,6 +297,31 @@ export default function ArrangementDetailPage() {
       if (job.jobType === "transcription") resumeTranscription(job.id, job.jobType);
     }
   }, [activeJobs, resumeStemSeparation, resumeBeatDetection, resumeTranscription]);
+
+  // AI Section generation state
+  const [isGeneratingSections, setIsGeneratingSections] = useState(false);
+  const [sectionGenError, setSectionGenError] = useState<string | null>(null);
+
+  async function handleGenerateSections() {
+    setIsGeneratingSections(true);
+    setSectionGenError(null);
+    try {
+      const res = await fetch(`/api/v1/arrangements/${arrangementId}/sections/generate`, {
+        method: "POST",
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error?.message || "Failed to generate sections");
+      }
+      queryClient.invalidateQueries({ queryKey: ["arrangement", arrangementId] });
+      queryClient.invalidateQueries({ queryKey: ["sections", arrangementId] });
+      queryClient.invalidateQueries({ queryKey: ["readiness", arrangementId] });
+    } catch (err) {
+      setSectionGenError(err instanceof Error ? err.message : "Failed to generate sections");
+    } finally {
+      setIsGeneratingSections(false);
+    }
+  }
 
   // Stem-to-Part mapping state
   const [stemMappings, setStemMappings] = useState<
@@ -592,11 +623,65 @@ export default function ArrangementDetailPage() {
     );
   }
 
+  function renderSectionsStepExtra() {
+    const canGenerate = hasAudio || hasSyncMap;
+    return (
+      <VStack align="stretch" gap={2}>
+        {canGenerate && !isGeneratingSections && !sectionGenError && (
+          <Flex align="center" gap={2} p={3} borderRadius="md" bg="purple.50" border="1px solid" borderColor="purple.100">
+            <Box flex={1}>
+              <Flex align="center" gap={1.5}>
+                <Text fontWeight="medium" fontSize="xs" color="gray.700">Auto-Generate Sections</Text>
+                {renderAiChip("")}
+              </Flex>
+              <Text fontSize="xs" color="gray.500">
+                Analyze audio and sheet music to identify Intro, Verse, Chorus, etc.
+              </Text>
+            </Box>
+            <Button size="xs" colorPalette="purple" onClick={handleGenerateSections}>
+              Generate
+            </Button>
+          </Flex>
+        )}
+        {isGeneratingSections && (
+          <Box p={3} borderRadius="md" bg="blue.50" border="1px solid" borderColor="blue.100">
+            <Flex align="center" gap={3}>
+              <Spinner size="sm" color="blue.500" />
+              <Box>
+                <Text fontWeight="medium" fontSize="xs" color="blue.700">Analyzing song structure...</Text>
+                <Text fontSize="xs" color="blue.500">AI is identifying sections from your audio and charts.</Text>
+              </Box>
+            </Flex>
+          </Box>
+        )}
+        {sectionGenError && (
+          <Flex align="center" p={3} borderRadius="md" bg="red.50" border="1px solid" borderColor="red.100">
+            <Box flex={1}>
+              <Text fontWeight="medium" fontSize="xs" color="red.700">Section generation failed</Text>
+              <Text fontSize="xs" color="red.500">{sectionGenError}</Text>
+            </Box>
+            <Button size="xs" variant="outline" colorPalette="red" onClick={handleGenerateSections}>
+              Retry
+            </Button>
+          </Flex>
+        )}
+        {hasSections && !isGeneratingSections && (
+          <Flex align="center" gap={2} p={3} borderRadius="md" bg="green.50" border="1px solid" borderColor="green.100">
+            <Text fontSize="xs" color="green.700" fontWeight="medium">
+              {arrangement?.sectionMarkers.length} sections defined
+            </Text>
+          </Flex>
+        )}
+      </VStack>
+    );
+  }
+
   function renderStepExtra(key: string) {
     switch (key) {
       case "audio": return renderAudioStepExtra();
       case "parts": return renderPartsStepExtra();
       case "charts": return renderChartsStepExtra();
+      case "sections": return renderSectionsStepExtra();
       case "syncMap": return renderSyncMapStepExtra();
       default: return null;
     }
@@ -610,6 +695,8 @@ export default function ArrangementDetailPage() {
         return hasStems && !hasParts && Object.keys(stemMappings).length > 0;
       case "charts":
         return stemsForTranscription.length > 0 || isTranscribing || !!transcriptionError;
+      case "sections":
+        return (hasAudio || hasSyncMap) || isGeneratingSections || !!sectionGenError || hasSections;
       case "syncMap":
         return !!(fullMix && (!hasSyncMap || isBeatProcessing || beatProcessingError)) || hasSyncMap;
       default:
@@ -653,6 +740,19 @@ export default function ArrangementDetailPage() {
               Publish Arrangement
             </Button>
           )}
+          {arrangement.status === "published" && (
+            <Flex align="center" gap={3}>
+              <Button
+                size="sm"
+                variant="outline"
+                colorPalette="gray"
+                onClick={() => archiveMutation.mutate({})}
+                loading={archiveMutation.isPending}
+              >
+                Archive
+              </Button>
+            </Flex>
+          )}
         </Flex>
 
         {/* Progress bar */}
@@ -672,6 +772,36 @@ export default function ArrangementDetailPage() {
               </Progress.Track>
             </Progress.Root>
           </Box>
+        )}
+
+        {/* Published banner */}
+        {arrangement.status === "published" && (
+          <Flex align="center" gap={3} p={4} bg="green.50" border="1px solid" borderColor="green.200" borderRadius="lg">
+            <Text fontSize="lg">✓</Text>
+            <Box flex={1}>
+              <Text fontWeight="semibold" fontSize="sm" color="green.800">
+                This arrangement is published and ready for rehearsal
+              </Text>
+              <Text fontSize="xs" color="green.600">
+                All band members with assigned parts can now access their charts and audio.
+              </Text>
+            </Box>
+          </Flex>
+        )}
+
+        {/* Archived banner */}
+        {arrangement.status === "archived" && (
+          <Flex align="center" gap={3} p={4} bg="gray.50" border="1px solid" borderColor="gray.200" borderRadius="lg">
+            <Text fontSize="lg">📦</Text>
+            <Box flex={1}>
+              <Text fontWeight="semibold" fontSize="sm" color="gray.700">
+                This arrangement has been archived
+              </Text>
+              <Text fontSize="xs" color="gray.500">
+                It is no longer active for rehearsal but all data is preserved.
+              </Text>
+            </Box>
+          </Flex>
         )}
       </Box>
 
@@ -785,7 +915,7 @@ export default function ArrangementDetailPage() {
       )}
 
       {/* Main Content - Three Column Layout */}
-      <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} gap={6}>
+      <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} gap={6} alignItems="stretch">
         {/* Parts & Assignments */}
         <Card.Root bg="white" borderWidth="1px" borderColor="gray.100">
           <Card.Body p={5}>
@@ -882,8 +1012,8 @@ export default function ArrangementDetailPage() {
         </Card.Root>
 
         {/* Audio Tracks */}
-        <Card.Root bg="white" borderWidth="1px" borderColor="gray.100">
-            <Card.Body p={5}>
+        <Card.Root bg="white" borderWidth="1px" borderColor="gray.100" display="flex" flexDirection="column">
+            <Card.Body p={5} display="flex" flexDirection="column" flex={1}>
               <Flex justify="space-between" align="center" mb={4}>
                 <Flex align="center" gap={2}>
                   <Heading size="sm" color="gray.800">Audio Tracks</Heading>
@@ -908,14 +1038,48 @@ export default function ArrangementDetailPage() {
                   </Button>
                 </Flex>
               ) : (
-                <AudioPlayer
-                    tracks={arrangement.audioAssets.map((a) => ({
-                      id: a.id,
-                      url: a.storageObject.objectKey,
-                      label: a.stemName || a.assetRole.replace("_", " "),
-                      role: a.assetRole,
-                    }))}
-                  />
+                <Flex direction="column" gap={4} flex={1}>
+                  <VStack align="stretch" gap={0}>
+                    {arrangement.audioAssets.map((a, i) => (
+                      <Flex
+                        key={a.id}
+                        align="center"
+                        py={2.5}
+                        px={3}
+                        gap={3}
+                        borderBottom={i < arrangement.audioAssets.length - 1 ? "1px solid" : "none"}
+                        borderColor="gray.100"
+                      >
+                        <Badge
+                          colorPalette={
+                            a.assetRole === "full_mix" ? "blue" :
+                            a.assetRole === "stem" ? "purple" :
+                            a.assetRole === "click" ? "orange" : "green"
+                          }
+                          variant="subtle"
+                          fontSize="xs"
+                          minW="60px"
+                          textAlign="center"
+                        >
+                          {a.assetRole.replace("_", " ")}
+                        </Badge>
+                        <Text fontSize="sm" fontWeight="medium" flex={1}>
+                          {a.stemName || a.storageObject.originalFileName}
+                        </Text>
+                      </Flex>
+                    ))}
+                  </VStack>
+                  <Box mt="auto" pt={2} borderTop="1px solid" borderColor="gray.100">
+                    <AudioPlayer
+                      tracks={arrangement.audioAssets.map((a) => ({
+                        id: a.id,
+                        url: a.storageObject.objectKey,
+                        label: a.stemName || a.assetRole.replace("_", " "),
+                        role: a.assetRole,
+                      }))}
+                    />
+                  </Box>
+                </Flex>
               )}
             </Card.Body>
           </Card.Root>

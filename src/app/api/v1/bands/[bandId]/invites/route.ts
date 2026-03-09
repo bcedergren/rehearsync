@@ -3,6 +3,8 @@ import { withBandRole } from "@/lib/api/middleware";
 import * as response from "@/lib/api/response";
 import { createInviteLinkSchema } from "@/lib/validators/invite";
 import * as inviteService from "@/lib/services/invite.service";
+import { sendBandInviteEmail } from "@/lib/email";
+import { prisma } from "@/lib/prisma";
 
 export const GET = withBandRole("leader", "admin")(async (_req, ctx) => {
   const links = await inviteService.listInviteLinks(ctx.bandId, "band_invite");
@@ -26,6 +28,24 @@ export const POST = withBandRole("leader", "admin")(async (req: NextRequest, ctx
       maxUses: parsed.data.maxUses,
     }
   );
+
+  // Send invite email if address provided
+  if (parsed.data.email) {
+    const [band, member] = await Promise.all([
+      prisma.band.findUnique({ where: { id: ctx.bandId }, select: { name: true } }),
+      prisma.member.findUnique({ where: { id: ctx.memberId }, select: { displayName: true } }),
+    ]);
+
+    const appUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+    const joinUrl = `${appUrl}/join/${link.code}`;
+
+    sendBandInviteEmail(
+      parsed.data.email,
+      band?.name || "a band",
+      member?.displayName || "Someone",
+      joinUrl
+    ).catch((err) => console.error("Failed to send invite email:", err));
+  }
 
   return response.created(link);
 });

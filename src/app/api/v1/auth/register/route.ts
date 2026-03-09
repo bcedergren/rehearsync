@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import * as response from "@/lib/api/response";
+import { sendWelcomeEmail } from "@/lib/email";
 
 const registerSchema = z.object({
   name: z.string().min(1).max(100),
@@ -34,6 +35,11 @@ export async function POST(req: NextRequest) {
       data: { name, email, passwordHash },
       select: { id: true, name: true, email: true },
     });
+
+    // Send welcome email (fire-and-forget)
+    sendWelcomeEmail(email, name).catch((err) =>
+      console.error("Failed to send welcome email:", err)
+    );
 
     return response.created(user);
   } catch (err: unknown) {

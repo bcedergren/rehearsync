@@ -32,6 +32,11 @@ describe("MODELS", () => {
     expect(MODELS.PIANO_TRANSCRIPTION).toContain("bytedance/piano-transcription:");
     expect(MODELS.PIANO_TRANSCRIPTION.split(":")[1]).toHaveLength(64);
   });
+
+  it("has ESSENTIA_BPM model with version hash", () => {
+    expect(MODELS.ESSENTIA_BPM).toContain("mtg/essentia-bpm:");
+    expect(MODELS.ESSENTIA_BPM.split(":")[1]).toHaveLength(64);
+  });
 });
 
 describe("createStemSeparationPrediction", () => {
@@ -63,9 +68,15 @@ describe("createTranscriptionPrediction", () => {
 });
 
 describe("createBeatDetectionPrediction", () => {
-  it("throws unavailable error (basic-pitch removed from Replicate)", async () => {
-    await expect(
-      createBeatDetectionPrediction("https://example.com/mix.mp3")
-    ).rejects.toThrow("temporarily unavailable");
+  it("creates prediction with essentia BPM model", async () => {
+    const result = await createBeatDetectionPrediction("https://example.com/mix.mp3");
+
+    expect(result).toEqual({ id: "pred-123" });
+    expect(mockCreate).toHaveBeenCalledWith({
+      version: MODELS.ESSENTIA_BPM.split(":")[1],
+      input: { audio: "https://example.com/mix.mp3", algo_type: "deepsquare-k16" },
+      webhook: "https://test.supabase.co/functions/v1/replicate-webhook",
+      webhook_events_filter: ["completed"],
+    });
   });
 });

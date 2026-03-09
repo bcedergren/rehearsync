@@ -7,6 +7,7 @@ export type InviteLinkType = (typeof inviteLinkTypes)[number];
 export const createInviteLinkSchema = z.object({
   expiresInHours: z.number().int().min(1).max(168).optional(), // 1h to 7 days
   maxUses: z.number().int().min(1).max(100).optional(),
+  email: z.string().email().optional(), // Send invite email to this address
 });
 
 export type CreateInviteLinkInput = z.infer<typeof createInviteLinkSchema>;

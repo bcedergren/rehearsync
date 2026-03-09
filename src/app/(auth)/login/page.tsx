@@ -214,6 +214,12 @@ function LoginForm() {
             </VStack>
           </form>
 
+          <Flex justify="center" mt={4}>
+            <ChakraLink asChild color="gray.400" fontSize="sm" _hover={{ color: "blue.300" }}>
+              <NextLink href="/forgot-password">Forgot your password?</NextLink>
+            </ChakraLink>
+          </Flex>
+
           <Text mt={6} fontSize="sm" textAlign="center" color="gray.400">
             No account?{" "}
             <ChakraLink asChild color="blue.300" _hover={{ color: "blue.200" }}>

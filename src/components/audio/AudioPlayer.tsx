@@ -7,10 +7,11 @@ import {
   Text,
   Button,
   Badge,
-  VStack,
   Slider,
 } from "@chakra-ui/react";
 import { useSignedUrls } from "@/hooks/useSignedUrl";
+import { Play, Pause, Volume2 } from "lucide-react";
+import WaveSurfer from "wavesurfer.js";
 
 interface AudioTrack {
   id: string;
@@ -39,6 +40,13 @@ const ROLE_COLORS: Record<string, string> = {
   guide: "green",
 };
 
+const WAVEFORM_COLORS: Record<string, { wave: string; progress: string }> = {
+  full_mix: { wave: "#90CDF4", progress: "#3182CE" },
+  stem: { wave: "#D6BCFA", progress: "#805AD5" },
+  click: { wave: "#FBD38D", progress: "#DD6B20" },
+  guide: { wave: "#9AE6B4", progress: "#38A169" },
+};
+
 export function AudioPlayer({
   tracks,
   positionMs,
@@ -56,6 +64,11 @@ export function AudioPlayer({
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState([80]);
   const seekingRef = useRef(false);
+
+  // Waveform refs
+  const waveformContainerRef = useRef<HTMLDivElement | null>(null);
+  const wavesurferRef = useRef<WaveSurfer | null>(null);
+  const wavesurferReadyRef = useRef(false);
 
   const activeTrack = tracks.find((t) => t.id === activeTrackId) || tracks[0];
 
@@ -125,6 +138,62 @@ export function AudioPlayer({
     }
   }, [transportStatus, isPlaying]);
 
+  // Initialize / update WaveSurfer for the active track
+  useEffect(() => {
+    if (!waveformContainerRef.current || !activeTrack) return;
+    const url = signedUrls[activeTrack.url];
+    if (!url) return;
+
+    // Destroy previous instance
+    if (wavesurferRef.current) {
+      wavesurferRef.current.destroy();
+      wavesurferRef.current = null;
+      wavesurferReadyRef.current = false;
+    }
+
+    const colors = WAVEFORM_COLORS[activeTrack.role] || WAVEFORM_COLORS.full_mix;
+
+    const ws = WaveSurfer.create({
+      container: waveformContainerRef.current,
+      waveColor: colors.wave,
+      progressColor: colors.progress,
+      cursorColor: colors.progress,
+      cursorWidth: 2,
+      barWidth: 2,
+      barGap: 1,
+      barRadius: 2,
+      height: 48,
+      normalize: true,
+      interact: true,
+      // Use the existing audio element instead of creating a new one
+      media: audioRef.current || undefined,
+    });
+
+    ws.load(url);
+
+    ws.on("ready", () => {
+      wavesurferReadyRef.current = true;
+    });
+
+    // Clicking on the waveform seeks the audio element
+    ws.on("seeking", (progress: number) => {
+      if (audioRef.current) {
+        const newTime = progress;
+        audioRef.current.currentTime = newTime;
+        setCurrentTime(newTime);
+      }
+    });
+
+    wavesurferRef.current = ws;
+
+    return () => {
+      ws.destroy();
+      wavesurferRef.current = null;
+      wavesurferReadyRef.current = false;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTrack?.id, signedUrls[activeTrack?.url ?? ""]]);
+
   const togglePlay = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -135,18 +204,6 @@ export function AudioPlayer({
       audio.play().then(() => setIsPlaying(true)).catch(() => {});
     }
   }, [isPlaying]);
-
-  const handleSeek = useCallback((details: { value: number[] }) => {
-    seekingRef.current = true;
-    setCurrentTime(details.value[0]);
-  }, []);
-
-  const handleSeekEnd = useCallback((details: { value: number[] }) => {
-    if (audioRef.current) {
-      audioRef.current.currentTime = details.value[0];
-    }
-    seekingRef.current = false;
-  }, []);
 
   const switchTrack = useCallback(
     (trackId: string) => {
@@ -206,6 +263,18 @@ export function AudioPlayer({
         </Flex>
       )}
 
+      {/* Waveform */}
+      <Box
+        ref={waveformContainerRef}
+        w="full"
+        h="48px"
+        mb={2}
+        borderRadius="md"
+        bg="gray.50"
+        overflow="hidden"
+        cursor="pointer"
+      />
+
       {/* Player controls */}
       <Flex align="center" gap={3}>
         <Button
@@ -213,39 +282,24 @@ export function AudioPlayer({
           variant="solid"
           colorPalette={isPlaying ? "orange" : "green"}
           onClick={togglePlay}
-          w="70px"
+          px={3}
+          minW="40px"
         >
-          {isPlaying ? "Pause" : "Play"}
+          {isPlaying ? <Pause size={16} /> : <Play size={16} />}
         </Button>
 
         <Text fontSize="xs" color="gray.500" fontFamily="mono" w="45px" flexShrink={0}>
           {formatTime(currentTime)}
         </Text>
 
-        <Box flex={1}>
-          <Slider.Root
-            min={0}
-            max={duration || 1}
-            step={0.1}
-            value={[currentTime]}
-            onValueChange={handleSeek}
-            onValueChangeEnd={handleSeekEnd}
-            size="sm"
-          >
-            <Slider.Control>
-              <Slider.Track>
-                <Slider.Range />
-              </Slider.Track>
-              <Slider.Thumb index={0} />
-            </Slider.Control>
-          </Slider.Root>
-        </Box>
+        <Box flex={1} />
 
         <Text fontSize="xs" color="gray.500" fontFamily="mono" w="45px" flexShrink={0}>
           {formatTime(duration)}
         </Text>
 
         {/* Volume */}
+        <Volume2 size={14} color="var(--chakra-colors-gray-400)" />
         <Box w="80px">
           <Slider.Root
             min={0}

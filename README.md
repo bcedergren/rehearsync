@@ -7,7 +7,9 @@ Rehearsal management platform for bands. Organize songs, arrangements, parts, an
 - **Band Management** — Create bands, invite members, assign roles
 - **Song & Arrangement Library** — Track songs with multiple arrangements, sections, and parts
 - **Sheet Music & Audio Assets** — Upload PDFs, MusicXML, and audio files with versioning
-- **AI Audio Processing** — Separate stems (Demucs), generate sheet music (Basic Pitch + OpenAI), auto-detect beats for sync maps
+- **AI Audio Processing** — Separate stems (Demucs), generate sheet music (OpenAI), auto-detect beats (Essentia) for sync maps
+- **AI Section Analysis** — Automatically identify song sections (Intro, Verse, Chorus, etc.) from audio and sheet music using GPT-4o
+- **Audio Waveform Player** — Interactive waveform visualization (WaveSurfer.js) with color-coded tracks by role
 - **Score Sync Maps** — Map audio timestamps to bar numbers for synchronized playback
 - **Real-Time Rehearsal Sessions** — WebSocket-powered transport with synchronized state
 - **Subscription Tiers** — Free, Band, and Agent tiers with Stripe billing
@@ -23,7 +25,8 @@ Rehearsal management platform for bands. Organize songs, arrangements, parts, an
 | Storage | Supabase Storage |
 | State | TanStack Query, Zustand |
 | Payments | Stripe |
-| AI/ML | Replicate (Demucs, Basic Pitch), OpenAI |
+| AI/ML | Replicate (Demucs, Essentia), OpenAI (GPT-4o) |
+| Audio | WaveSurfer.js |
 | Hosting | Vercel + Supabase |
 
 ## Getting Started
@@ -108,9 +111,10 @@ prisma/
 
 RehearSync uses Replicate and OpenAI to process audio:
 
-1. **Stem Separation** — Demucs splits a full mix into vocals, drums, bass, and other
-2. **Transcription** — Basic Pitch extracts MIDI notes, OpenAI converts to MusicXML
-3. **Beat Detection** — Note onsets are analyzed to estimate tempo and generate bar-level sync maps
+1. **Stem Separation** — Demucs splits a full mix into vocals, drums, bass, guitar, piano, and other (6 stems)
+2. **Beat Detection** — Essentia estimates BPM and generates bar-level sync maps
+3. **Section Analysis** — GPT-4o analyzes audio metadata and MusicXML to identify song sections (Intro, Verse, Chorus, etc.)
+4. **Transcription** — Audio-to-MusicXML conversion (currently disabled pending model availability)
 
 Processing runs asynchronously via Replicate webhooks handled by a Supabase Edge Function, keeping Vercel serverless functions within timeout limits.
 
