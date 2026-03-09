@@ -21,6 +21,7 @@ export async function createStemSeparationPrediction(audioUrl: string) {
     version: MODELS.DEMUCS.split(":")[1],
     input: {
       audio: audioUrl,
+      model_name: "htdemucs_6s",
       output_format: "mp3",
     },
     webhook: getWebhookUrl(),

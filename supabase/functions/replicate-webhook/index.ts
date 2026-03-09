@@ -12,28 +12,59 @@ const STORAGE_BUCKET = "rehearsync-assets";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-// ─── Webhook Signature Verification ─────────────────────────────
+// ─── Webhook Signature Verification (Standard Webhooks / Replicate) ──
+
+function base64Decode(str: string): Uint8Array {
+  const binary = atob(str);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function base64Encode(buf: ArrayBuffer): string {
+  return btoa(String.fromCharCode(...new Uint8Array(buf)));
+}
 
 async function verifyWebhookSignature(
   body: string,
-  signature: string | null
+  webhookId: string | null,
+  webhookTimestamp: string | null,
+  webhookSignature: string | null
 ): Promise<boolean> {
-  if (!REPLICATE_WEBHOOK_SECRET || !signature) return false;
+  if (!REPLICATE_WEBHOOK_SECRET || !webhookId || !webhookTimestamp || !webhookSignature) {
+    return false;
+  }
+
+  // Replicate signs: "${webhook-id}.${webhook-timestamp}.${body}"
+  const signedContent = `${webhookId}.${webhookTimestamp}.${body}`;
+
+  // Secret is base64-encoded, prefixed with "whsec_"
+  const secretStr = REPLICATE_WEBHOOK_SECRET.startsWith("whsec_")
+    ? REPLICATE_WEBHOOK_SECRET.slice(6)
+    : REPLICATE_WEBHOOK_SECRET;
+  const secretBytes = base64Decode(secretStr);
 
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
     "raw",
-    encoder.encode(REPLICATE_WEBHOOK_SECRET),
+    secretBytes,
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"]
   );
-  const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(body));
-  const computed = Array.from(new Uint8Array(sig))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(signedContent));
+  const computed = base64Encode(sig);
 
-  return computed === signature;
+  // Signature header can contain multiple space-separated signatures: "v1,<sig1> v1,<sig2>"
+  const signatures = webhookSignature.split(" ");
+  for (const versionedSig of signatures) {
+    const [version, sigValue] = versionedSig.split(",", 2);
+    if (version === "v1" && sigValue === computed) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 // ─── Database Helpers (raw SQL via Supabase) ────────────────────
@@ -159,7 +190,7 @@ async function createAudioAsset(
 
 // ─── Stem Separation Handler ────────────────────────────────────
 
-const STEM_NAMES = ["vocals", "drums", "bass", "other"] as const;
+const STEM_NAMES = ["vocals", "drums", "bass", "guitar", "piano", "other"] as const;
 
 async function handleStemSeparation(
   job: Record<string, unknown>,
@@ -590,12 +621,14 @@ Deno.serve(async (req: Request) => {
 
   const body = await req.text();
 
-  // Verify webhook signature if secret is configured
+  // Verify webhook signature if secret is configured (Standard Webhooks format)
   if (REPLICATE_WEBHOOK_SECRET) {
-    const signature = req.headers.get("webhook-signature");
-    const valid = await verifyWebhookSignature(body, signature);
+    const webhookId = req.headers.get("webhook-id");
+    const webhookTimestamp = req.headers.get("webhook-timestamp");
+    const webhookSignature = req.headers.get("webhook-signature");
+    const valid = await verifyWebhookSignature(body, webhookId, webhookTimestamp, webhookSignature);
     if (!valid) {
-      console.error("Invalid webhook signature");
+      console.error("Invalid webhook signature", { webhookId, webhookTimestamp, hasSignature: !!webhookSignature });
       return new Response("Invalid signature", { status: 401 });
     }
   }

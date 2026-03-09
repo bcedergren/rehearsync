@@ -18,9 +18,10 @@ import {
   NativeSelect,
   Spinner,
   Checkbox,
+  Progress,
 } from "@chakra-ui/react";
 import { useParams, useRouter } from "next/navigation";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useApiQuery, useApiMutation } from "@/hooks/useApi";
 import { useUpload } from "@/hooks/useUpload";
 import { useProcessingJob } from "@/hooks/useProcessingJob";
@@ -255,20 +256,47 @@ export default function ArrangementDetailPage() {
   const {
     isProcessing: isStemProcessing,
     error: stemProcessingError,
+    progress: stemProgress,
+    progressLabel: stemProgressLabel,
     startJob: startStemSeparation,
+    resumeJob: resumeStemSeparation,
   } = useProcessingJob(handleProcessingComplete);
 
   const {
     isProcessing: isBeatProcessing,
     error: beatProcessingError,
+    progress: beatProgress,
+    progressLabel: beatProgressLabel,
     startJob: startBeatDetection,
+    resumeJob: resumeBeatDetection,
   } = useProcessingJob(handleProcessingComplete);
 
   const {
     isProcessing: isTranscribing,
     error: transcriptionError,
+    progress: transcriptionProgress,
+    progressLabel: transcriptionProgressLabel,
     startJob: startTranscription,
+    resumeJob: resumeTranscription,
   } = useProcessingJob(handleProcessingComplete);
+
+  // Resume tracking any in-progress processing jobs on page load
+  interface ActiveJob { id: string; jobType: string; status: string }
+  const { data: activeJobs } = useApiQuery<ActiveJob[]>(
+    ["active-jobs", arrangementId],
+    `/arrangements/${arrangementId}/processing-jobs`
+  );
+
+  const resumedRef = useRef(false);
+  useEffect(() => {
+    if (!activeJobs || activeJobs.length === 0 || resumedRef.current) return;
+    resumedRef.current = true;
+    for (const job of activeJobs) {
+      if (job.jobType === "stem_separation") resumeStemSeparation(job.id, job.jobType);
+      if (job.jobType === "beat_detection") resumeBeatDetection(job.id, job.jobType);
+      if (job.jobType === "transcription") resumeTranscription(job.id, job.jobType);
+    }
+  }, [activeJobs, resumeStemSeparation, resumeBeatDetection, resumeTranscription]);
 
   // Stem-to-Part mapping state
   const [stemMappings, setStemMappings] = useState<
@@ -387,17 +415,38 @@ export default function ArrangementDetailPage() {
     processingLabel: string,
     processingHint: string,
     errorLabel: string,
-    onRetry?: () => void
+    onRetry?: () => void,
+    progressPct?: number | null,
+    progressMsg?: string | null
   ) {
     if (isProcessing) {
+      const hasProgress = progressPct != null && progressPct >= 0;
       return (
-        <Flex align="center" gap={3} p={3} borderRadius="md" bg="blue.50" border="1px solid" borderColor="blue.100">
-          <Spinner size="sm" color="blue.500" />
-          <Box>
-            <Text fontWeight="medium" fontSize="xs" color="blue.700">{processingLabel}</Text>
-            <Text fontSize="xs" color="blue.500">{processingHint}</Text>
-          </Box>
-        </Flex>
+        <Box p={3} borderRadius="md" bg="blue.50" border="1px solid" borderColor="blue.100">
+          <Flex align="center" gap={3}>
+            <Spinner size="sm" color="blue.500" />
+            <Box flex={1}>
+              <Flex align="center" gap={2}>
+                <Text fontWeight="medium" fontSize="xs" color="blue.700">{processingLabel}</Text>
+                {hasProgress && (
+                  <Text fontSize="xs" color="blue.600" fontWeight="semibold">{progressPct}%</Text>
+                )}
+              </Flex>
+              <Text fontSize="xs" color="blue.500">
+                {progressMsg || processingHint}
+              </Text>
+            </Box>
+          </Flex>
+          {hasProgress && (
+            <Box mt={2}>
+              <Progress.Root value={progressPct} size="xs" colorPalette="blue" borderRadius="full">
+                <Progress.Track borderRadius="full">
+                  <Progress.Range />
+                </Progress.Track>
+              </Progress.Root>
+            </Box>
+          )}
+        </Box>
       );
     }
     if (error) {
@@ -433,7 +482,7 @@ export default function ArrangementDetailPage() {
                 {renderAiChip("")}
               </Flex>
               <Text fontSize="xs" color="gray.500">
-                Split your full mix into vocals, drums, bass & other
+                Split your full mix into vocals, drums, bass, guitar, piano & other
               </Text>
             </Box>
             <Button
@@ -452,7 +501,9 @@ export default function ArrangementDetailPage() {
           "Separating stems...",
           "Usually takes 1-3 minutes. You can leave and come back.",
           "Stem separation failed",
-          fullMix ? () => startStemSeparation(fullMix.id, "stem_separation") : undefined
+          fullMix ? () => startStemSeparation(fullMix.id, "stem_separation") : undefined,
+          stemProgress,
+          stemProgressLabel
         )}
 
         {hasStems && (
@@ -571,7 +622,10 @@ export default function ArrangementDetailPage() {
           transcriptionError,
           "Transcribing audio to sheet music...",
           "AI is detecting notes and generating MusicXML. May take 2-5 minutes.",
-          "Transcription failed"
+          "Transcription failed",
+          undefined,
+          transcriptionProgress,
+          transcriptionProgressLabel
         )}
       </VStack>
     );
@@ -611,7 +665,9 @@ export default function ArrangementDetailPage() {
           "Generating sync map...",
           "Detecting beats and mapping bar positions. Usually under a minute.",
           "Beat detection failed",
-          fullMix ? () => startBeatDetection(fullMix.id, "beat_detection") : undefined
+          fullMix ? () => startBeatDetection(fullMix.id, "beat_detection") : undefined,
+          beatProgress,
+          beatProgressLabel
         )}
 
         {hasSyncMap && (
