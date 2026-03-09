@@ -80,9 +80,10 @@ model Band {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
-  members          Member[]
-  songs            Song[]
+  members           Member[]
+  songs             Song[]
   rehearsalSessions RehearsalSession[]
+  inviteLinks       InviteLink[]
 
   @@map("bands")
 }
@@ -109,6 +110,7 @@ model Member {
   sessionParticipations   SessionParticipant[]
   transportUpdates        TransportState[]          @relation("TransportUpdater")
   transportEvents         TransportEvent[]
+  createdInviteLinks      InviteLink[]
 
   @@unique([bandId, email])
   @@unique([bandId, userId])
@@ -348,6 +350,30 @@ model ProcessingJob {
   @@map("processing_jobs")
 }
 
+// ─── Invite Links ───────────────────────────────────────────────
+
+model InviteLink {
+  id                String    @id @default(uuid())
+  bandId            String    @map("band_id")
+  sessionId         String?   @map("session_id")
+  code              String    @unique
+  type              String    // band_invite | session_join
+  createdByMemberId String    @map("created_by_member_id")
+  defaultRole       String    @default("musician") @map("default_role")
+  expiresAt         DateTime? @map("expires_at")
+  maxUses           Int?      @map("max_uses")
+  useCount          Int       @default(0) @map("use_count")
+  isRevoked         Boolean   @default(false) @map("is_revoked")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  band      Band              @relation(fields: [bandId], references: [id], onDelete: Cascade)
+  session   RehearsalSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  createdBy Member            @relation(fields: [createdByMemberId], references: [id])
+
+  @@index([bandId, type])
+  @@map("invite_links")
+}
+
 // ─── Session & Transport (Phase 2) ─────────────────────────────
 
 model RehearsalSession {
@@ -363,9 +389,10 @@ model RehearsalSession {
   band           Band                @relation(fields: [bandId], references: [id], onDelete: Cascade)
   arrangement    Arrangement         @relation(fields: [arrangementId], references: [id], onDelete: Restrict)
   leader         Member              @relation("SessionLeader", fields: [leaderMemberId], references: [id], onDelete: Restrict)
-  participants   SessionParticipant[]
-  transportState TransportState?
+  participants    SessionParticipant[]
+  transportState  TransportState?
   transportEvents TransportEvent[]
+  inviteLinks     InviteLink[]
 
   @@index([bandId, state])
   @@map("rehearsal_sessions")

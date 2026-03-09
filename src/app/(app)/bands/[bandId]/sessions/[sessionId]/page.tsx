@@ -5,6 +5,7 @@ import {
   Button,
   Card,
   Heading,
+  Input,
   Text,
   Flex,
   Badge,
@@ -12,7 +13,8 @@ import {
   Spinner,
 } from "@chakra-ui/react";
 import { useParams } from "next/navigation";
-import { useApiQuery, useApiMutation } from "@/hooks/useApi";
+import { useState } from "react";
+import { useApiQuery, useApiMutation, apiFetch } from "@/hooks/useApi";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useSessionStore } from "@/stores/session.store";
 import { AudioPlayer } from "@/components/audio/AudioPlayer";
@@ -90,6 +92,28 @@ export default function SessionControlPage() {
     { invalidateKeys: [["session", sessionId]] }
   );
 
+  const [sessionLinkUrl, setSessionLinkUrl] = useState("");
+  const [sessionLinkCopied, setSessionLinkCopied] = useState(false);
+  const [generatingSessionLink, setGeneratingSessionLink] = useState(false);
+
+  async function shareSessionLink() {
+    setGeneratingSessionLink(true);
+    try {
+      const link = await apiFetch<{ code: string }>(
+        `/sessions/${sessionId}/invite-link`
+      );
+      const url = `${window.location.origin}/join/${link.code}`;
+      setSessionLinkUrl(url);
+      await navigator.clipboard.writeText(url);
+      setSessionLinkCopied(true);
+      setTimeout(() => setSessionLinkCopied(false), 3000);
+    } catch {
+      // Silently fail
+    } finally {
+      setGeneratingSessionLink(false);
+    }
+  }
+
   if (isLoading || !session) return <Flex justify="center" align="center" minH="40vh"><Spinner size="lg" color="blue.500" /></Flex>;
 
   // Use WS transport if connected, otherwise fall back to API data
@@ -125,14 +149,25 @@ export default function SessionControlPage() {
             {session.state.toUpperCase()}
           </Badge>
           {session.state !== "ended" && (
-            <Button
-              colorPalette="red"
-              variant="outline"
-              size="sm"
-              onClick={() => endMutation.mutate({})}
-            >
-              End Session
-            </Button>
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                colorPalette="blue"
+                loading={generatingSessionLink}
+                onClick={shareSessionLink}
+              >
+                {sessionLinkCopied ? "Link Copied!" : "Share Session"}
+              </Button>
+              <Button
+                colorPalette="red"
+                variant="outline"
+                size="sm"
+                onClick={() => endMutation.mutate({})}
+              >
+                End Session
+              </Button>
+            </>
           )}
         </Flex>
       </Flex>
@@ -197,6 +232,38 @@ export default function SessionControlPage() {
           )}
         </Card.Body>
       </Card.Root>
+
+      {/* Session Share Link */}
+      {sessionLinkUrl && (
+        <Card.Root mb={6}>
+          <Card.Body>
+            <Heading size="sm" mb={2}>Session Link</Heading>
+            <Flex gap={2} align="center">
+              <Input
+                value={sessionLinkUrl}
+                readOnly
+                size="sm"
+                flex={1}
+                onClick={(e) => (e.target as HTMLInputElement).select()}
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={async () => {
+                  await navigator.clipboard.writeText(sessionLinkUrl);
+                  setSessionLinkCopied(true);
+                  setTimeout(() => setSessionLinkCopied(false), 3000);
+                }}
+              >
+                {sessionLinkCopied ? "Copied!" : "Copy"}
+              </Button>
+            </Flex>
+            <Text fontSize="xs" color="gray.500" mt={2}>
+              Share this link with band members so they can join the session on their devices.
+            </Text>
+          </Card.Body>
+        </Card.Root>
+      )}
 
       {/* Audio Player */}
       {audioAssets && audioAssets.length > 0 && (

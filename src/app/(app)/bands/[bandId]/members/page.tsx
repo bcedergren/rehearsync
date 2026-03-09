@@ -3,6 +3,7 @@
 import {
   Box,
   Button,
+  Card,
   Heading,
   Text,
   Table,
@@ -18,7 +19,7 @@ import {
 } from "@chakra-ui/react";
 import { useParams } from "next/navigation";
 import { useState } from "react";
-import { useApiQuery, useApiMutation } from "@/hooks/useApi";
+import { useApiQuery, useApiMutation, apiFetch } from "@/hooks/useApi";
 
 interface Member {
   id: string;
@@ -27,6 +28,15 @@ interface Member {
   role: string;
   defaultInstrument: string | null;
   isActive: boolean;
+}
+
+interface InviteLink {
+  id: string;
+  code: string;
+  expiresAt: string | null;
+  maxUses: number | null;
+  useCount: number;
+  createdAt: string;
 }
 
 export default function MembersPage() {
@@ -43,6 +53,41 @@ export default function MembersPage() {
   const [displayName, setDisplayName] = useState("");
   const [role, setRole] = useState("musician");
   const [instrument, setInstrument] = useState("");
+
+  const [inviteLinkUrl, setInviteLinkUrl] = useState("");
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [generatingLink, setGeneratingLink] = useState(false);
+
+  const { data: inviteLinks, refetch: refetchLinks } = useApiQuery<InviteLink[]>(
+    ["inviteLinks", bandId],
+    `/bands/${bandId}/invites`
+  );
+
+  async function generateInviteLink() {
+    setGeneratingLink(true);
+    try {
+      const link = await apiFetch<InviteLink>(`/bands/${bandId}/invites`, {
+        method: "POST",
+        body: JSON.stringify({ expiresInHours: 168 }), // 7 days
+      });
+      const url = `${window.location.origin}/join/${link.code}`;
+      setInviteLinkUrl(url);
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 3000);
+      refetchLinks();
+    } catch {
+      // Silently fail — user can retry
+    } finally {
+      setGeneratingLink(false);
+    }
+  }
+
+  async function revokeLink(inviteId: string) {
+    await apiFetch(`/bands/${bandId}/invites/${inviteId}`, { method: "DELETE" });
+    refetchLinks();
+    if (inviteLinkUrl) setInviteLinkUrl("");
+  }
 
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [editDisplayName, setEditDisplayName] = useState("");
@@ -99,6 +144,99 @@ export default function MembersPage() {
           Invite Member
         </Button>
       </Flex>
+
+      {/* Invite Link Card */}
+      <Card.Root mb={6}>
+        <Card.Body>
+          <Flex justify="space-between" align="center" mb={inviteLinkUrl || (inviteLinks && inviteLinks.length > 0) ? 3 : 0}>
+            <Box>
+              <Heading size="sm">Invite Link</Heading>
+              <Text fontSize="xs" color="gray.500">
+                Share a link so musicians can join your band
+              </Text>
+            </Box>
+            <Button
+              size="sm"
+              colorPalette="blue"
+              variant="outline"
+              loading={generatingLink}
+              onClick={generateInviteLink}
+            >
+              {linkCopied ? "Copied!" : "Generate Link"}
+            </Button>
+          </Flex>
+
+          {inviteLinkUrl && (
+            <Flex
+              bg="gray.50"
+              borderRadius="md"
+              p={3}
+              align="center"
+              gap={2}
+              mb={3}
+            >
+              <Input
+                value={inviteLinkUrl}
+                readOnly
+                size="sm"
+                bg="white"
+                flex={1}
+                onClick={(e) => (e.target as HTMLInputElement).select()}
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={async () => {
+                  await navigator.clipboard.writeText(inviteLinkUrl);
+                  setLinkCopied(true);
+                  setTimeout(() => setLinkCopied(false), 3000);
+                }}
+              >
+                {linkCopied ? "Copied!" : "Copy"}
+              </Button>
+            </Flex>
+          )}
+
+          {inviteLinks && inviteLinks.length > 0 && (
+            <Box>
+              <Text fontSize="xs" color="gray.500" mb={2}>
+                Active links ({inviteLinks.length})
+              </Text>
+              {inviteLinks.map((link) => (
+                <Flex
+                  key={link.id}
+                  justify="space-between"
+                  align="center"
+                  py={1}
+                  fontSize="sm"
+                >
+                  <Text color="gray.600" fontFamily="mono" fontSize="xs">
+                    ...{link.code.slice(-6)}
+                    {link.expiresAt && (
+                      <Text as="span" color="gray.400" ml={2}>
+                        expires {new Date(link.expiresAt).toLocaleDateString()}
+                      </Text>
+                    )}
+                    {link.useCount > 0 && (
+                      <Text as="span" color="gray.400" ml={2}>
+                        ({link.useCount} used)
+                      </Text>
+                    )}
+                  </Text>
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    colorPalette="red"
+                    onClick={() => revokeLink(link.id)}
+                  >
+                    Revoke
+                  </Button>
+                </Flex>
+              ))}
+            </Box>
+          )}
+        </Card.Body>
+      </Card.Root>
 
       {members && members.length > 0 && (
         <Table.Root>

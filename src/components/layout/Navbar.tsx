@@ -7,6 +7,17 @@ import { useState } from "react";
 export function Navbar() {
   const { data: session } = useSession();
   const [showSignOut, setShowSignOut] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+
+  async function handleSignOut() {
+    setSigningOut(true);
+    try {
+      await signOut({ redirectTo: "/login" });
+    } catch {
+      // NextAuth v5 beta may throw on redirect — fallback
+      window.location.href = "/login";
+    }
+  }
 
   return (
     <Flex
@@ -77,7 +88,8 @@ export function Navbar() {
                 <Button
                   colorPalette="red"
                   flex={1}
-                  onClick={() => signOut({ callbackUrl: "/login" })}
+                  loading={signingOut}
+                  onClick={handleSignOut}
                 >
                   Sign Out
                 </Button>
