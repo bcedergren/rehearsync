@@ -908,28 +908,7 @@ export default function ArrangementDetailPage() {
                   </Button>
                 </Flex>
               ) : (
-                <VStack align="stretch" gap={4}>
-                  <VStack align="stretch" gap={1}>
-                    {arrangement.audioAssets.map((a) => (
-                      <Flex key={a.id} align="center" py={2} px={3} borderRadius="md" bg="gray.50" gap={2}>
-                        <Badge
-                          colorPalette={
-                            a.assetRole === "full_mix" ? "blue" :
-                            a.assetRole === "stem" ? "purple" :
-                            a.assetRole === "click" ? "orange" : "green"
-                          }
-                          variant="subtle"
-                          fontSize="xs"
-                        >
-                          {a.assetRole.replace("_", " ")}
-                        </Badge>
-                        <Text fontSize="sm" fontWeight="medium" flex={1}>
-                          {a.stemName || a.storageObject.originalFileName}
-                        </Text>
-                      </Flex>
-                    ))}
-                  </VStack>
-                  <AudioPlayer
+                <AudioPlayer
                     tracks={arrangement.audioAssets.map((a) => ({
                       id: a.id,
                       url: a.storageObject.objectKey,
@@ -937,7 +916,6 @@ export default function ArrangementDetailPage() {
                       role: a.assetRole,
                     }))}
                   />
-                </VStack>
               )}
             </Card.Body>
           </Card.Root>
