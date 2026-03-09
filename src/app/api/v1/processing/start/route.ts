@@ -79,9 +79,8 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         prediction = await createStemSeparationPrediction(audioUrl);
         break;
       case "transcription":
-        // Throws — temporarily unavailable (basic-pitch removed from Replicate)
-        await createTranscriptionPrediction(audioUrl);
-        throw new Error("unreachable");
+        prediction = await createTranscriptionPrediction(audioUrl);
+        break;
       case "beat_detection":
         // Throws — temporarily unavailable (basic-pitch removed from Replicate)
         await createBeatDetectionPrediction(audioUrl);

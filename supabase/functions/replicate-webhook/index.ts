@@ -4,6 +4,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.98.0";
 import { crypto } from "https://deno.land/std@0.208.0/crypto/mod.ts";
+import { Midi } from "https://esm.sh/@tonejs/midi@2.0.28";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -385,7 +386,7 @@ const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
 async function handleTranscription(
   job: Record<string, unknown>,
-  output: Record<string, unknown>
+  output: unknown
 ) {
   const arrangementId = job.arrangement_id as string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -395,52 +396,77 @@ async function handleTranscription(
     throw new Error("Could not determine bandId from job");
   }
 
-  // Basic Pitch returns midi_file URL and note_events
-  const midiFileUrl = output.midi_file as string | undefined;
-  const noteEvents = output.note_events as number[][] | undefined;
+  // MT3 returns a single MIDI URL string; legacy basic-pitch returned an object
+  const midiUrl = typeof output === "string"
+    ? output
+    : (output as Record<string, unknown>)?.midi_file as string | undefined;
 
-  if (!noteEvents || noteEvents.length === 0) {
-    throw new Error("No note events returned from basic-pitch");
+  if (!midiUrl) {
+    throw new Error("No MIDI file URL in transcription output");
   }
 
-  // Download MIDI file for storage
-  let midiData: ArrayBuffer | null = null;
-  if (midiFileUrl) {
-    const midiResponse = await fetch(midiFileUrl);
-    if (midiResponse.ok) {
-      midiData = await midiResponse.arrayBuffer();
-    }
+  // Download MIDI file
+  const midiResponse = await fetch(midiUrl);
+  if (!midiResponse.ok) {
+    throw new Error(`Failed to download MIDI: ${midiResponse.status}`);
+  }
+  const midiData = await midiResponse.arrayBuffer();
+
+  // Upload MIDI to Supabase Storage
+  const midiId = crypto.randomUUID();
+  const midiKey = `bands/${bandId}/midi/${midiId}.mid`;
+  const { error: midiUploadError } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(midiKey, midiData, { contentType: "audio/midi", upsert: false });
+
+  if (midiUploadError) {
+    throw new Error(`Failed to upload MIDI: ${midiUploadError.message}`);
   }
 
-  // Format note events for OpenAI
-  // note_events: [start_time_s, end_time_s, midi_pitch, velocity]
-  const notesSummary = noteEvents
-    .slice(0, 500) // Limit to first 500 notes to stay within token limits
-    .map((e) => ({
-      start: Math.round(e[0] * 1000) / 1000,
-      end: Math.round(e[1] * 1000) / 1000,
-      pitch: Math.round(e[2]),
-      velocity: Math.round(e[3] * 127),
-    }));
+  // Create StorageObject for MIDI
+  const midiStorageObjectId = await createStorageObject(
+    STORAGE_BUCKET,
+    midiKey,
+    "transcription.mid",
+    "audio/midi",
+    midiData.byteLength
+  );
 
-  if (!OPENAI_API_KEY) {
-    // Store MIDI data but skip MusicXML generation
-    const result: Record<string, unknown> = {
-      noteEventsCount: noteEvents.length,
-      skippedMusicXml: true,
-      reason: "OPENAI_API_KEY not configured",
-    };
+  const result: Record<string, unknown> = {
+    midiStorageObjectId,
+    midiStorageKey: midiKey,
+  };
 
-    // Still upload MIDI if available
-    if (midiData) {
-      const midiId = crypto.randomUUID();
-      const midiKey = `bands/${bandId}/midi/${midiId}.mid`;
-      await supabase.storage
-        .from(STORAGE_BUCKET)
-        .upload(midiKey, midiData, { contentType: "audio/midi", upsert: false });
-      result.midiStorageKey = midiKey;
+  // Parse MIDI to extract note events for MusicXML generation
+  let notesSummary: { start: number; end: number; pitch: number; velocity: number }[] = [];
+  try {
+    const midi = new Midi(new Uint8Array(midiData));
+    const allNotes: { start: number; end: number; pitch: number; velocity: number }[] = [];
+    for (const track of midi.tracks) {
+      for (const note of track.notes) {
+        allNotes.push({
+          start: Math.round(note.time * 1000) / 1000,
+          end: Math.round((note.time + note.duration) * 1000) / 1000,
+          pitch: note.midi,
+          velocity: Math.round(note.velocity * 127),
+        });
+      }
     }
+    allNotes.sort((a, b) => a.start - b.start);
+    notesSummary = allNotes.slice(0, 500);
+    result.noteEventsCount = allNotes.length;
+  } catch (err) {
+    console.error("Failed to parse MIDI for note extraction:", err);
+  }
 
+  if (!OPENAI_API_KEY || notesSummary.length === 0) {
+    if (!OPENAI_API_KEY) {
+      result.skippedMusicXml = true;
+      result.reason = "OPENAI_API_KEY not configured";
+    } else {
+      result.skippedMusicXml = true;
+      result.reason = "No notes extracted from MIDI";
+    }
     return result;
   }
 
@@ -516,8 +542,9 @@ Rules:
     xmlBytes.byteLength
   );
 
+  result.musicXmlStorageObjectId = xmlStorageObjectId;
+
   // Find the Part linked to this stem's audio asset (if any)
-  // Look for a Part whose instrument matches the stem name
   const audioAssetId = job.audio_asset_id as string;
   const { data: audioAsset } = await supabase
     .from("audio_assets")
@@ -528,7 +555,6 @@ Rules:
   let partId: string | null = null;
 
   if (audioAsset?.stem_name) {
-    // Try to find a part that matches the stem name
     const { data: matchingPart } = await supabase
       .from("parts")
       .select("id")
@@ -540,7 +566,6 @@ Rules:
     partId = matchingPart?.id ?? null;
   }
 
-  // If no matching part found, try to find any part for this arrangement
   if (!partId) {
     const { data: anyPart } = await supabase
       .from("parts")
@@ -553,14 +578,8 @@ Rules:
     partId = anyPart?.id ?? null;
   }
 
-  const result: Record<string, unknown> = {
-    musicXmlStorageObjectId: xmlStorageObjectId,
-    noteEventsCount: noteEvents.length,
-  };
-
   // Create SheetMusicAsset if we found a matching part
   if (partId) {
-    // Get next version
     const { data: existingSheets } = await supabase
       .from("sheet_music_assets")
       .select("version_num")
@@ -572,7 +591,6 @@ Rules:
     const nextVersion =
       ((existingSheets?.[0]?.version_num as number) ?? 0) + 1;
 
-    // Retire existing active musicxml for this part
     await supabase
       .from("sheet_music_assets")
       .update({ is_active: false, status: "retired" })
@@ -583,6 +601,7 @@ Rules:
     const { data: sheetAsset, error: sheetError } = await supabase
       .from("sheet_music_assets")
       .insert({
+        id: crypto.randomUUID(),
         arrangement_id: arrangementId,
         part_id: partId,
         storage_object_id: xmlStorageObjectId,
@@ -601,16 +620,6 @@ Rules:
       result.sheetMusicAssetId = sheetAsset.id;
       result.partId = partId;
     }
-  }
-
-  // Also upload MIDI file if available
-  if (midiData) {
-    const midiId = crypto.randomUUID();
-    const midiKey = `bands/${bandId}/midi/${midiId}.mid`;
-    await supabase.storage
-      .from(STORAGE_BUCKET)
-      .upload(midiKey, midiData, { contentType: "audio/midi", upsert: false });
-    result.midiStorageKey = midiKey;
   }
 
   return result;
@@ -646,7 +655,7 @@ Deno.serve(async (req: Request) => {
 
   const predictionId = payload.id as string;
   const status = payload.status as string;
-  const output = payload.output as Record<string, unknown> | null;
+  const output = payload.output as unknown;
   const error = payload.error as string | null;
 
   console.log(`Replicate webhook: prediction=${predictionId} status=${status}`);
@@ -685,7 +694,7 @@ Deno.serve(async (req: Request) => {
           result = await handleTranscription(job, output);
           break;
         case "beat_detection":
-          result = await handleBeatDetection(job, output);
+          result = await handleBeatDetection(job, output as Record<string, unknown>);
           break;
         default:
           throw new Error(`Unknown job type: ${job.job_type}`);

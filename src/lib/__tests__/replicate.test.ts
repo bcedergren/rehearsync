@@ -27,6 +27,11 @@ describe("MODELS", () => {
     expect(MODELS.DEMUCS).toContain("cjwbw/demucs:");
     expect(MODELS.DEMUCS.split(":")[1]).toHaveLength(64);
   });
+
+  it("has MT3 model with version hash", () => {
+    expect(MODELS.MT3).toContain("turian/multi-task-music-transcription:");
+    expect(MODELS.MT3.split(":")[1]).toHaveLength(64);
+  });
 });
 
 describe("createStemSeparationPrediction", () => {
@@ -36,7 +41,7 @@ describe("createStemSeparationPrediction", () => {
     expect(result).toEqual({ id: "pred-123" });
     expect(mockCreate).toHaveBeenCalledWith({
       version: MODELS.DEMUCS.split(":")[1],
-      input: { audio: "https://example.com/audio.mp3", output_format: "mp3" },
+      input: { audio: "https://example.com/audio.mp3", model_name: "htdemucs_6s", output_format: "mp3" },
       webhook: "https://test.supabase.co/functions/v1/replicate-webhook",
       webhook_events_filter: ["completed"],
     });
@@ -44,10 +49,16 @@ describe("createStemSeparationPrediction", () => {
 });
 
 describe("createTranscriptionPrediction", () => {
-  it("throws unavailable error (basic-pitch removed from Replicate)", async () => {
-    await expect(
-      createTranscriptionPrediction("https://example.com/stem.mp3")
-    ).rejects.toThrow("temporarily unavailable");
+  it("creates prediction with MT3 model", async () => {
+    const result = await createTranscriptionPrediction("https://example.com/stem.mp3");
+
+    expect(result).toEqual({ id: "pred-123" });
+    expect(mockCreate).toHaveBeenCalledWith({
+      version: MODELS.MT3.split(":")[1],
+      input: { audio_file: "https://example.com/stem.mp3", model_type: "mt3" },
+      webhook: "https://test.supabase.co/functions/v1/replicate-webhook",
+      webhook_events_filter: ["completed"],
+    });
   });
 });
 
