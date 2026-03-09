@@ -77,56 +77,50 @@ interface Arrangement {
   song: { id: string; title: string; bandId: string };
 }
 
-// --- Step config (reordered: audio first to support AI pipeline) ---
+// --- Step config ---
 
 const STEP_CONFIG = [
   {
     key: "audio",
-    label: "Upload Audio",
-    description: "Add a full mix, backing track, click, or stems",
-    icon: "1",
+    label: "Audio",
+    description: "Full mix, stems, or click track",
     action: "upload-audio",
-    actionLabel: "Upload Audio",
+    actionLabel: "Upload",
   },
   {
     key: "parts",
-    label: "Define Parts",
-    description: "Add instrument parts to this arrangement",
-    icon: "2",
+    label: "Parts",
+    description: "Define instrument parts",
     action: "parts",
-    actionLabel: "Manage Parts",
+    actionLabel: "Manage",
   },
   {
     key: "charts",
-    label: "Upload Charts",
-    description: "Upload sheet music (PDF or MusicXML) for each part",
-    icon: "3",
+    label: "Charts",
+    description: "Sheet music for each part",
     action: "upload-sheet-music",
-    actionLabel: "Upload Sheet Music",
+    actionLabel: "Upload",
   },
   {
     key: "assign",
-    label: "Assign Parts",
-    description: "Assign band members to their instrument parts",
-    icon: "4",
+    label: "Assign",
+    description: "Members to parts",
     action: "assign",
-    actionLabel: "Assign Members",
+    actionLabel: "Assign",
   },
   {
     key: "sections",
-    label: "Mark Sections",
-    description: "Define song sections (Intro, Verse, Chorus, etc.)",
-    icon: "5",
+    label: "Sections",
+    description: "Intro, Verse, Chorus, etc.",
     action: "sections",
-    actionLabel: "Edit Sections",
+    actionLabel: "Edit",
   },
   {
     key: "syncMap",
-    label: "Create Sync Map",
-    description: "Map audio timestamps to bar numbers for score following",
-    icon: "6",
+    label: "Sync Map",
+    description: "Audio-to-bar mapping",
     action: "sync-map",
-    actionLabel: "Edit Sync Map",
+    actionLabel: "Edit",
   },
 ];
 
@@ -328,6 +322,9 @@ export default function ArrangementDetailPage() {
     setStemMappings({});
   }
 
+  // Expanded step for AI extras
+  const [expandedStep, setExpandedStep] = useState<string | null>(null);
+
   if (isLoading || !arrangement) {
     return (
       <Flex justify="center" align="center" minH="60vh">
@@ -356,10 +353,13 @@ export default function ArrangementDetailPage() {
   const hasSections = arrangement.sectionMarkers.length > 0;
   const hasSyncMap = readiness?.checks.activeSyncMapPresent ?? false;
 
-  // New step order: audio, parts, charts, assign, sections, syncMap
   const stepStatus = [hasAudio, hasParts, hasCharts, hasAssignments, hasSections, hasSyncMap];
   const completedSteps = stepStatus.filter(Boolean).length;
   const totalSteps = stepStatus.length;
+  const progressPct = Math.round((completedSteps / totalSteps) * 100);
+
+  // Find the first incomplete step for "next step" guidance
+  const nextStepIndex = stepStatus.findIndex((done) => !done);
 
   // Initialize stem mappings when stems appear and no parts exist
   if (hasStems && Object.keys(stemMappings).length === 0 && !hasParts) {
@@ -377,7 +377,7 @@ export default function ArrangementDetailPage() {
     }
   }
 
-  // Stems available for transcription (have matching part but no sheet music)
+  // Stems available for transcription
   const stemsForTranscription = stems.filter((stem) => {
     if (!stem.stemName) return false;
     const matchingPart = arrangement.parts.find((p) =>
@@ -398,13 +398,12 @@ export default function ArrangementDetailPage() {
     }
   }
 
-  // --- Inline AI sub-components ---
+  // --- Inline AI helpers ---
 
   function renderAiChip(label: string) {
     return (
       <Badge colorPalette="purple" variant="subtle" fontSize="2xs" px={1.5}>
-        AI
-        {label ? ` ${label}` : ""}
+        AI{label ? ` ${label}` : ""}
       </Badge>
     );
   }
@@ -467,13 +466,12 @@ export default function ArrangementDetailPage() {
     return null;
   }
 
-  // --- Audio step: inline AI (stem separation) ---
+  // --- AI extras for each step ---
 
   function renderAudioStepExtra() {
     const showStemButton = fullMix && !hasStems && !isStemProcessing && !stemProcessingError;
-
     return (
-      <VStack align="stretch" gap={2} mt={2}>
+      <VStack align="stretch" gap={2}>
         {showStemButton && (
           <Flex align="center" gap={2} p={3} borderRadius="md" bg="purple.50" border="1px solid" borderColor="purple.100">
             <Box flex={1}>
@@ -482,58 +480,36 @@ export default function ArrangementDetailPage() {
                 {renderAiChip("")}
               </Flex>
               <Text fontSize="xs" color="gray.500">
-                Split your full mix into vocals, drums, bass, guitar, piano & other
+                Split into vocals, drums, bass, guitar, piano & other
               </Text>
             </Box>
-            <Button
-              size="xs"
-              colorPalette="purple"
-              onClick={() => startStemSeparation(fullMix.id, "stem_separation")}
-            >
+            <Button size="xs" colorPalette="purple" onClick={() => startStemSeparation(fullMix.id, "stem_separation")}>
               Separate
             </Button>
           </Flex>
         )}
-
-        {renderProcessingStatus(
-          isStemProcessing,
-          stemProcessingError,
-          "Separating stems...",
-          "Usually takes 1-3 minutes. You can leave and come back.",
-          "Stem separation failed",
-          fullMix ? () => startStemSeparation(fullMix.id, "stem_separation") : undefined,
-          stemProgress,
-          stemProgressLabel
-        )}
-
+        {renderProcessingStatus(isStemProcessing, stemProcessingError, "Separating stems...", "Usually takes 1-3 minutes. You can leave and come back.", "Stem separation failed", fullMix ? () => startStemSeparation(fullMix.id, "stem_separation") : undefined, stemProgress, stemProgressLabel)}
         {hasStems && (
           <Flex align="center" gap={2} p={3} borderRadius="md" bg="green.50" border="1px solid" borderColor="green.100">
-            <Text fontSize="xs" color="green.700" fontWeight="medium">
-              {stems.length} stems separated
-            </Text>
-            <Text fontSize="xs" color="gray.500">
-              ({stems.map((s) => s.stemName).join(", ")})
-            </Text>
+            <Text fontSize="xs" color="green.700" fontWeight="medium">{stems.length} stems separated</Text>
+            <Text fontSize="xs" color="gray.500">({stems.map((s) => s.stemName).join(", ")})</Text>
           </Flex>
         )}
       </VStack>
     );
   }
 
-  // --- Parts step: inline AI (stem-to-part mapping) ---
-
   function renderPartsStepExtra() {
     const showStemMapping = hasStems && !hasParts && Object.keys(stemMappings).length > 0;
     if (!showStemMapping) return null;
-
     return (
-      <Box mt={2} p={3} borderRadius="md" bg="purple.50" border="1px solid" borderColor="purple.100">
+      <Box p={3} borderRadius="md" bg="purple.50" border="1px solid" borderColor="purple.100">
         <Flex align="center" gap={1.5} mb={2}>
           <Text fontWeight="medium" fontSize="xs" color="gray.700">Map Stems to Parts</Text>
           {renderAiChip("")}
         </Flex>
         <Text fontSize="xs" color="gray.500" mb={3}>
-          Select stems to create instrument parts from. Rename to match your arrangement.
+          Select stems to create instrument parts from.
         </Text>
         <VStack align="stretch" gap={2}>
           {stems.map((stem) => {
@@ -541,43 +517,18 @@ export default function ArrangementDetailPage() {
             if (!mapping) return null;
             return (
               <Flex key={stem.id} align="center" gap={3} p={2} bg="white" borderRadius="md" border="1px solid" borderColor="gray.100">
-                <Checkbox.Root
-                  checked={mapping.checked}
-                  onCheckedChange={(e) =>
-                    setStemMappings((prev) => ({
-                      ...prev,
-                      [stem.id]: { ...prev[stem.id], checked: !!e.checked },
-                    }))
-                  }
-                >
+                <Checkbox.Root checked={mapping.checked} onCheckedChange={(e) => setStemMappings((prev) => ({ ...prev, [stem.id]: { ...prev[stem.id], checked: !!e.checked } }))}>
                   <Checkbox.HiddenInput />
                   <Checkbox.Control />
                 </Checkbox.Root>
                 <Badge colorPalette="purple" variant="subtle" fontSize="2xs">{stem.stemName}</Badge>
-                <Input
-                  size="sm"
-                  flex={1}
-                  value={mapping.instrumentName}
-                  onChange={(e) =>
-                    setStemMappings((prev) => ({
-                      ...prev,
-                      [stem.id]: { ...prev[stem.id], instrumentName: e.target.value },
-                    }))
-                  }
-                  placeholder="Instrument name"
-                />
+                <Input size="sm" flex={1} value={mapping.instrumentName} onChange={(e) => setStemMappings((prev) => ({ ...prev, [stem.id]: { ...prev[stem.id], instrumentName: e.target.value } }))} placeholder="Instrument name" />
               </Flex>
             );
           })}
         </VStack>
         <Flex justify="flex-end" mt={3}>
-          <Button
-            size="xs"
-            colorPalette="purple"
-            onClick={handleCreatePartsFromStems}
-            loading={createPartMutation.isPending}
-            disabled={!Object.values(stemMappings).some((m) => m.checked && m.instrumentName.trim())}
-          >
+          <Button size="xs" colorPalette="purple" onClick={handleCreatePartsFromStems} loading={createPartMutation.isPending} disabled={!Object.values(stemMappings).some((m) => m.checked && m.instrumentName.trim())}>
             Create Parts from Stems
           </Button>
         </Flex>
@@ -585,13 +536,10 @@ export default function ArrangementDetailPage() {
     );
   }
 
-  // --- Charts step: inline AI (transcription) ---
-
   function renderChartsStepExtra() {
     const showTranscribe = stemsForTranscription.length > 0 && !isTranscribing && !transcriptionError;
-
     return (
-      <VStack align="stretch" gap={2} mt={2}>
+      <VStack align="stretch" gap={2}>
         {showTranscribe && (
           <Flex align="center" gap={2} p={3} borderRadius="md" bg="purple.50" border="1px solid" borderColor="purple.100">
             <Box flex={1}>
@@ -603,42 +551,20 @@ export default function ArrangementDetailPage() {
                 Transcribe {stemsForTranscription.map((s) => s.stemName).join(", ")} to MusicXML
               </Text>
             </Box>
-            <Button
-              size="xs"
-              colorPalette="purple"
-              onClick={async () => {
-                for (let i = 0; i < stemsForTranscription.length; i++) {
-                  if (i > 0) await new Promise((r) => setTimeout(r, 12000));
-                  await startTranscription(stemsForTranscription[i].id, "transcription");
-                }
-              }}
-            >
+            <Button size="xs" colorPalette="purple" onClick={async () => { for (let i = 0; i < stemsForTranscription.length; i++) { if (i > 0) await new Promise((r) => setTimeout(r, 12000)); await startTranscription(stemsForTranscription[i].id, "transcription"); } }}>
               Transcribe{stemsForTranscription.length > 1 ? " All" : ""}
             </Button>
           </Flex>
         )}
-
-        {renderProcessingStatus(
-          isTranscribing,
-          transcriptionError,
-          "Transcribing audio to sheet music...",
-          "AI is detecting notes and generating MusicXML. May take 2-5 minutes.",
-          "Transcription failed",
-          undefined,
-          transcriptionProgress,
-          transcriptionProgressLabel
-        )}
+        {renderProcessingStatus(isTranscribing, transcriptionError, "Transcribing audio to sheet music...", "AI is detecting notes and generating MusicXML. May take 2-5 minutes.", "Transcription failed", undefined, transcriptionProgress, transcriptionProgressLabel)}
       </VStack>
     );
   }
 
-  // --- Sync Map step: inline AI (beat detection) ---
-
   function renderSyncMapStepExtra() {
     const showBeatButton = fullMix && !hasSyncMap && !isBeatProcessing && !beatProcessingError;
-
     return (
-      <VStack align="stretch" gap={2} mt={2}>
+      <VStack align="stretch" gap={2}>
         {showBeatButton && (
           <Flex align="center" gap={2} p={3} borderRadius="md" bg="purple.50" border="1px solid" borderColor="purple.100">
             <Box flex={1}>
@@ -650,27 +576,12 @@ export default function ArrangementDetailPage() {
                 Detect beats and create bar-to-timestamp mapping
               </Text>
             </Box>
-            <Button
-              size="xs"
-              colorPalette="purple"
-              onClick={() => startBeatDetection(fullMix.id, "beat_detection")}
-            >
+            <Button size="xs" colorPalette="purple" onClick={() => startBeatDetection(fullMix.id, "beat_detection")}>
               Generate
             </Button>
           </Flex>
         )}
-
-        {renderProcessingStatus(
-          isBeatProcessing,
-          beatProcessingError,
-          "Generating sync map...",
-          "Detecting beats and mapping bar positions. Usually under a minute.",
-          "Beat detection failed",
-          fullMix ? () => startBeatDetection(fullMix.id, "beat_detection") : undefined,
-          beatProgress,
-          beatProgressLabel
-        )}
-
+        {renderProcessingStatus(isBeatProcessing, beatProcessingError, "Generating sync map...", "Detecting beats and mapping bar positions. Usually under a minute.", "Beat detection failed", fullMix ? () => startBeatDetection(fullMix.id, "beat_detection") : undefined, beatProgress, beatProgressLabel)}
         {hasSyncMap && (
           <Flex align="center" gap={2} p={3} borderRadius="md" bg="green.50" border="1px solid" borderColor="green.100">
             <Text fontSize="xs" color="green.700" fontWeight="medium">Sync map active</Text>
@@ -681,7 +592,6 @@ export default function ArrangementDetailPage() {
     );
   }
 
-  // Map step keys to their inline AI extras
   function renderStepExtra(key: string) {
     switch (key) {
       case "audio": return renderAudioStepExtra();
@@ -692,7 +602,6 @@ export default function ArrangementDetailPage() {
     }
   }
 
-  // Check if a step has AI content to show
   function stepHasAiContent(key: string): boolean {
     switch (key) {
       case "audio":
@@ -709,150 +618,200 @@ export default function ArrangementDetailPage() {
   }
 
   return (
-    <Box maxW="1000px">
+    <Box maxW="1100px">
       {/* Header */}
-      <Flex justify="space-between" align="start" mb={8}>
-        <Box>
-          <Flex align="center" gap={3} mb={1}>
+      <Box mb={6}>
+        <Button
+          variant="ghost"
+          size="sm"
+          color="gray.500"
+          mb={2}
+          onClick={() => router.push(`/bands/${bandId}/songs/${songId}`)}
+        >
+          ← Back to song
+        </Button>
+
+        <Flex justify="space-between" align="center" mb={4}>
+          <Box>
+            <Flex align="center" gap={3}>
+              <Heading size="xl" color="gray.800">
+                {arrangement.name}
+              </Heading>
+              <Text color="gray.400" fontWeight="normal" fontSize="lg">
+                {arrangement.versionLabel}
+              </Text>
+              <Badge colorPalette={status.color} size="lg">{status.label}</Badge>
+            </Flex>
+          </Box>
+          {arrangement.status === "draft" && (
             <Button
-              variant="ghost"
-              size="sm"
-              color="gray.500"
-              onClick={() => router.push(`/bands/${bandId}/songs/${songId}`)}
+              colorPalette="green"
+              onClick={() => publishMutation.mutate({})}
+              loading={publishMutation.isPending}
+              disabled={!readiness?.isReady}
             >
-              ← Back to song
+              Publish Arrangement
             </Button>
-          </Flex>
-          <Heading size="xl" color="gray.800">
-            {arrangement.name}
-            <Text as="span" color="gray.400" fontWeight="normal" ml={2}>
-              {arrangement.versionLabel}
-            </Text>
-          </Heading>
-          <Flex align="center" gap={3} mt={2}>
-            <Badge colorPalette={status.color} size="lg">{status.label}</Badge>
-            <Text fontSize="sm" color="gray.500">
-              {completedSteps}/{totalSteps} setup steps complete
-            </Text>
-          </Flex>
-        </Box>
+          )}
+        </Flex>
+
+        {/* Progress bar */}
         {arrangement.status === "draft" && (
-          <Button
-            colorPalette="green"
-            onClick={() => publishMutation.mutate({})}
-            loading={publishMutation.isPending}
-            disabled={!readiness?.isReady}
-          >
-            Publish Arrangement
-          </Button>
+          <Box>
+            <Flex justify="space-between" align="center" mb={2}>
+              <Text fontSize="sm" fontWeight="medium" color="gray.600">
+                Setup Progress
+              </Text>
+              <Text fontSize="sm" color="gray.500" fontWeight="semibold">
+                {completedSteps} of {totalSteps} complete
+              </Text>
+            </Flex>
+            <Progress.Root value={progressPct} size="sm" colorPalette={progressPct === 100 ? "green" : "blue"} borderRadius="full">
+              <Progress.Track borderRadius="full" bg="gray.100">
+                <Progress.Range />
+              </Progress.Track>
+            </Progress.Root>
+          </Box>
         )}
-      </Flex>
+      </Box>
 
-      {/* Setup Checklist with integrated AI */}
+      {/* Setup Steps - Compact Grid */}
       {arrangement.status === "draft" && (
-        <Card.Root mb={8} bg="white" borderWidth="1px" borderColor="gray.100">
-          <Card.Body p={6}>
-            <Heading size="md" mb={1} color="gray.800">Setup Checklist</Heading>
-            <Text fontSize="sm" color="gray.500" mb={5}>
-              Complete these steps to get your arrangement rehearsal-ready.
-            </Text>
-            <VStack align="stretch" gap={3}>
-              {STEP_CONFIG.map((step, i) => {
-                const done = stepStatus[i];
-                const hasAi = stepHasAiContent(step.key);
-                return (
-                  <Box key={step.key}>
-                    <Flex
-                      align="center"
-                      p={4}
-                      borderRadius={hasAi ? "lg lg 0 0" : "lg"}
-                      bg={done ? "green.50" : "gray.50"}
-                      border="1px solid"
-                      borderColor={done ? "green.100" : "gray.100"}
-                      borderBottomWidth={hasAi ? 0 : "1px"}
-                      transition="all 0.15s"
-                      _hover={{ borderColor: done ? "green.200" : "blue.200", shadow: "sm" }}
-                    >
-                      <Flex
-                        w="32px"
-                        h="32px"
-                        borderRadius="full"
-                        bg={done ? "green.100" : "white"}
-                        border={done ? "none" : "2px solid"}
-                        borderColor="gray.200"
-                        align="center"
-                        justify="center"
-                        flexShrink={0}
-                        mr={4}
-                        fontSize="sm"
-                        fontWeight="bold"
-                        color={done ? "green.700" : "gray.400"}
-                      >
-                        {done ? "✓" : step.icon}
-                      </Flex>
-                      <Box flex={1}>
-                        <Text fontWeight="semibold" fontSize="sm" color={done ? "green.700" : "gray.800"}>
-                          {step.label}
-                        </Text>
-                        <Text fontSize="xs" color="gray.500">
-                          {step.description}
-                        </Text>
-                      </Box>
-                      <Button
-                        size="sm"
-                        minW="140px"
-                        variant={done ? "outline" : "solid"}
-                        colorPalette={done ? "gray" : "blue"}
-                        onClick={() => handleStepAction(step.action)}
-                      >
-                        {done ? "Edit" : step.actionLabel}
-                      </Button>
-                    </Flex>
+        <Box mb={8}>
+          <SimpleGrid columns={{ base: 2, md: 3, lg: 6 }} gap={3} mb={3}>
+            {STEP_CONFIG.map((step, i) => {
+              const done = stepStatus[i];
+              const isNext = i === nextStepIndex;
+              const hasAi = stepHasAiContent(step.key);
+              const isExpanded = expandedStep === step.key;
 
-                    {/* Inline AI actions for this step */}
+              return (
+                <Box
+                  key={step.key}
+                  as="button"
+                  textAlign="left"
+                  p={3}
+                  borderRadius="xl"
+                  bg={done ? "green.50" : isNext ? "blue.50" : "gray.50"}
+                  border="2px solid"
+                  borderColor={done ? "green.200" : isNext ? "blue.300" : "gray.100"}
+                  transition="all 0.15s"
+                  _hover={{ borderColor: done ? "green.300" : "blue.300", shadow: "md", transform: "translateY(-1px)" }}
+                  cursor="pointer"
+                  onClick={() => {
+                    if (hasAi) {
+                      setExpandedStep(isExpanded ? null : step.key);
+                    } else {
+                      handleStepAction(step.action);
+                    }
+                  }}
+                  position="relative"
+                >
+                  {/* Step number / check */}
+                  <Flex align="center" justify="space-between" mb={2}>
+                    <Flex
+                      w="28px"
+                      h="28px"
+                      borderRadius="full"
+                      bg={done ? "green.500" : isNext ? "blue.500" : "gray.300"}
+                      align="center"
+                      justify="center"
+                      fontSize="xs"
+                      fontWeight="bold"
+                      color="white"
+                    >
+                      {done ? "✓" : i + 1}
+                    </Flex>
                     {hasAi && (
-                      <Box
-                        px={4}
-                        pb={4}
-                        pt={2}
-                        bg={done ? "green.50" : "gray.50"}
-                        border="1px solid"
-                        borderColor={done ? "green.100" : "gray.100"}
-                        borderTopWidth={0}
-                        borderRadius="0 0 lg lg"
-                        ml="48px"
-                      >
-                        {renderStepExtra(step.key)}
-                      </Box>
+                      <Badge colorPalette="purple" variant="subtle" fontSize="2xs">AI</Badge>
                     )}
-                  </Box>
-                );
-              })}
-            </VStack>
-          </Card.Body>
-        </Card.Root>
+                  </Flex>
+
+                  <Text fontWeight="semibold" fontSize="sm" color={done ? "green.700" : "gray.800"} lineHeight="short">
+                    {step.label}
+                  </Text>
+                  <Text fontSize="xs" color="gray.500" lineHeight="short" mt={0.5}>
+                    {step.description}
+                  </Text>
+
+                  {/* Action hint */}
+                  {isNext && !done && (
+                    <Text fontSize="xs" fontWeight="semibold" color="blue.600" mt={2}>
+                      Next step →
+                    </Text>
+                  )}
+
+                  {/* Go button for steps with AI (click opens AI panel, button navigates) */}
+                  {hasAi && (
+                    <Button
+                      size="xs"
+                      variant={done ? "outline" : "solid"}
+                      colorPalette={done ? "gray" : "blue"}
+                      mt={2}
+                      w="full"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleStepAction(step.action);
+                      }}
+                    >
+                      {done ? "Edit" : step.actionLabel}
+                    </Button>
+                  )}
+                </Box>
+              );
+            })}
+          </SimpleGrid>
+
+          {/* Expanded AI panel below the grid */}
+          {expandedStep && stepHasAiContent(expandedStep) && (
+            <Card.Root bg="white" borderWidth="1px" borderColor="purple.100" shadow="sm">
+              <Card.Body p={4}>
+                <Flex justify="space-between" align="center" mb={3}>
+                  <Flex align="center" gap={2}>
+                    <Badge colorPalette="purple" variant="subtle">AI Tools</Badge>
+                    <Text fontSize="sm" fontWeight="medium" color="gray.700">
+                      {STEP_CONFIG.find((s) => s.key === expandedStep)?.label}
+                    </Text>
+                  </Flex>
+                  <Button size="xs" variant="ghost" onClick={() => setExpandedStep(null)}>
+                    Close
+                  </Button>
+                </Flex>
+                {renderStepExtra(expandedStep)}
+              </Card.Body>
+            </Card.Root>
+          )}
+        </Box>
       )}
 
+      {/* Main Content - Two Column Layout */}
       <SimpleGrid columns={{ base: 1, lg: 2 }} gap={6}>
-        {/* Parts Overview */}
+        {/* Left Column: Parts & Assignments */}
         <Card.Root bg="white" borderWidth="1px" borderColor="gray.100">
-          <Card.Body p={6}>
+          <Card.Body p={5}>
             <Flex justify="space-between" align="center" mb={4}>
-              <Heading size="sm" color="gray.800">Parts & Assignments</Heading>
-              <Button
-                size="xs"
-                variant="outline"
-                onClick={() => router.push(`${basePath}/parts`)}
-              >
+              <Flex align="center" gap={2}>
+                <Heading size="sm" color="gray.800">Parts & Assignments</Heading>
+                {hasParts && (
+                  <Badge colorPalette="gray" variant="subtle" fontSize="xs">
+                    {arrangement.parts.length}
+                  </Badge>
+                )}
+              </Flex>
+              <Button size="xs" variant="outline" onClick={() => router.push(`${basePath}/parts`)}>
                 Manage
               </Button>
             </Flex>
             {arrangement.parts.length === 0 ? (
-              <Box p={6} textAlign="center" bg="gray.50" borderRadius="lg">
-                <Text fontSize="sm" color="gray.500">
-                  No parts yet. Add instrument parts to get started.
+              <Flex direction="column" align="center" justify="center" p={8} bg="gray.50" borderRadius="lg" textAlign="center">
+                <Text fontSize="2xl" mb={2}>🎵</Text>
+                <Text fontSize="sm" color="gray.500" mb={3}>
+                  No parts defined yet
                 </Text>
-              </Box>
+                <Button size="sm" colorPalette="blue" variant="outline" onClick={() => router.push(`${basePath}/parts`)}>
+                  Add Parts
+                </Button>
+              </Flex>
             ) : (
               <Table.Root size="sm">
                 <Table.Header>
@@ -878,16 +837,14 @@ export default function ArrangementDetailPage() {
                             {part.partName ? ` (${part.partName})` : ""}
                           </Text>
                           {part.isRequired && (
-                            <Badge colorPalette="orange" size="sm" variant="subtle">
-                              required
-                            </Badge>
+                            <Badge colorPalette="orange" size="sm" variant="subtle">req</Badge>
                           )}
                         </Flex>
                       </Table.Cell>
                       <Table.Cell>
                         {part.sheetMusicAssets.length > 0 ? (
                           <Flex align="center" gap={2}>
-                            <Badge colorPalette="green" variant="subtle">
+                            <Badge colorPalette="green" variant="subtle" fontSize="xs">
                               {part.sheetMusicAssets[0].fileType.toUpperCase()}
                             </Badge>
                             <Button
@@ -913,7 +870,7 @@ export default function ArrangementDetailPage() {
                         {part.assignments[0]?.member.displayName ? (
                           <Text fontSize="sm">{part.assignments[0].member.displayName}</Text>
                         ) : (
-                          <Text fontSize="sm" color="gray.400">Unassigned</Text>
+                          <Text fontSize="sm" color="gray.400">—</Text>
                         )}
                       </Table.Cell>
                     </Table.Row>
@@ -924,41 +881,39 @@ export default function ArrangementDetailPage() {
           </Card.Body>
         </Card.Root>
 
-        {/* Audio & Sections */}
+        {/* Right Column */}
         <VStack align="stretch" gap={6}>
-          {/* Audio Assets */}
+          {/* Audio Tracks */}
           <Card.Root bg="white" borderWidth="1px" borderColor="gray.100">
-            <Card.Body p={6}>
+            <Card.Body p={5}>
               <Flex justify="space-between" align="center" mb={4}>
-                <Heading size="sm" color="gray.800">Audio Tracks</Heading>
-                <Button
-                  size="xs"
-                  variant="outline"
-                  onClick={() => setShowUploadAudio(true)}
-                >
+                <Flex align="center" gap={2}>
+                  <Heading size="sm" color="gray.800">Audio Tracks</Heading>
+                  {hasAudio && (
+                    <Badge colorPalette="gray" variant="subtle" fontSize="xs">
+                      {arrangement.audioAssets.length}
+                    </Badge>
+                  )}
+                </Flex>
+                <Button size="xs" variant="outline" onClick={() => setShowUploadAudio(true)}>
                   Upload
                 </Button>
               </Flex>
               {arrangement.audioAssets.length === 0 ? (
-                <Box p={6} textAlign="center" bg="gray.50" borderRadius="lg">
-                  <Text fontSize="sm" color="gray.500">
-                    No audio yet. Upload a backing track or stems.
+                <Flex direction="column" align="center" justify="center" p={8} bg="gray.50" borderRadius="lg" textAlign="center">
+                  <Text fontSize="2xl" mb={2}>🎧</Text>
+                  <Text fontSize="sm" color="gray.500" mb={3}>
+                    No audio uploaded yet
                   </Text>
-                </Box>
+                  <Button size="sm" colorPalette="blue" variant="outline" onClick={() => setShowUploadAudio(true)}>
+                    Upload Audio
+                  </Button>
+                </Flex>
               ) : (
                 <VStack align="stretch" gap={4}>
-                  {/* Track list */}
                   <VStack align="stretch" gap={1}>
                     {arrangement.audioAssets.map((a) => (
-                      <Flex
-                        key={a.id}
-                        align="center"
-                        py={2}
-                        px={3}
-                        borderRadius="md"
-                        bg="gray.50"
-                        gap={2}
-                      >
+                      <Flex key={a.id} align="center" py={2} px={3} borderRadius="md" bg="gray.50" gap={2}>
                         <Badge
                           colorPalette={
                             a.assetRole === "full_mix" ? "blue" :
@@ -973,13 +928,9 @@ export default function ArrangementDetailPage() {
                         <Text fontSize="sm" fontWeight="medium" flex={1}>
                           {a.stemName || a.storageObject.originalFileName}
                         </Text>
-                        <Text fontSize="xs" color="gray.400">
-                          {a.storageObject.originalFileName}
-                        </Text>
                       </Flex>
                     ))}
                   </VStack>
-                  {/* Player */}
                   <AudioPlayer
                     tracks={arrangement.audioAssets.map((a) => ({
                       id: a.id,
@@ -993,47 +944,50 @@ export default function ArrangementDetailPage() {
             </Card.Body>
           </Card.Root>
 
-          {/* Sections */}
+          {/* Song Sections */}
           <Card.Root bg="white" borderWidth="1px" borderColor="gray.100">
-            <Card.Body p={6}>
+            <Card.Body p={5}>
               <Flex justify="space-between" align="center" mb={4}>
-                <Heading size="sm" color="gray.800">Song Sections</Heading>
-                <Button
-                  size="xs"
-                  variant="outline"
-                  onClick={() => router.push(`${basePath}/sections`)}
-                >
+                <Flex align="center" gap={2}>
+                  <Heading size="sm" color="gray.800">Song Sections</Heading>
+                  {hasSections && (
+                    <Badge colorPalette="gray" variant="subtle" fontSize="xs">
+                      {arrangement.sectionMarkers.length}
+                    </Badge>
+                  )}
+                </Flex>
+                <Button size="xs" variant="outline" onClick={() => router.push(`${basePath}/sections`)}>
                   Edit
                 </Button>
               </Flex>
               {arrangement.sectionMarkers.length === 0 ? (
-                <Box p={6} textAlign="center" bg="gray.50" borderRadius="lg">
-                  <Text fontSize="sm" color="gray.500">
-                    No sections defined. Add markers like Intro, Verse, Chorus.
+                <Flex direction="column" align="center" justify="center" p={6} bg="gray.50" borderRadius="lg" textAlign="center">
+                  <Text fontSize="sm" color="gray.500" mb={3}>
+                    No sections defined yet
                   </Text>
-                </Box>
+                  <Button size="sm" colorPalette="blue" variant="outline" onClick={() => router.push(`${basePath}/sections`)}>
+                    Add Sections
+                  </Button>
+                </Flex>
               ) : (
-                <VStack align="stretch" gap={1}>
-                  {arrangement.sectionMarkers.map((s, i) => (
-                    <Flex
+                <Flex gap={2} flexWrap="wrap">
+                  {arrangement.sectionMarkers.map((s) => (
+                    <Badge
                       key={s.id}
-                      justify="space-between"
-                      align="center"
-                      py={2}
+                      colorPalette="blue"
+                      variant="subtle"
+                      py={1.5}
                       px={3}
-                      borderRadius="md"
-                      bg={i % 2 === 0 ? "gray.50" : "transparent"}
+                      borderRadius="full"
+                      fontSize="xs"
                     >
-                      <Flex align="center" gap={2}>
-                        <Box w="6px" h="6px" borderRadius="full" bg="blue.400" />
-                        <Text fontSize="sm" fontWeight="medium">{s.name}</Text>
-                      </Flex>
-                      <Text fontSize="xs" color="gray.400" fontFamily="mono">
-                        Bar {s.startBar}
+                      {s.name}
+                      <Text as="span" color="blue.400" ml={1} fontFamily="mono" fontSize="xs">
+                        bar {s.startBar}
                       </Text>
-                    </Flex>
+                    </Badge>
                   ))}
-                </VStack>
+                </Flex>
               )}
             </Card.Body>
           </Card.Root>
@@ -1091,11 +1045,7 @@ export default function ArrangementDetailPage() {
             </Dialog.Body>
             <Dialog.Footer>
               <Flex gap={3} w="full">
-                <Button
-                  variant="outline"
-                  flex={1}
-                  onClick={() => setShowUploadSheet(false)}
-                >
+                <Button variant="outline" flex={1} onClick={() => setShowUploadSheet(false)}>
                   Cancel
                 </Button>
                 <Button
@@ -1217,11 +1167,7 @@ export default function ArrangementDetailPage() {
             </Dialog.Body>
             <Dialog.Footer>
               <Flex gap={3} w="full">
-                <Button
-                  variant="outline"
-                  flex={1}
-                  onClick={() => setShowUploadAudio(false)}
-                >
+                <Button variant="outline" flex={1} onClick={() => setShowUploadAudio(false)}>
                   Cancel
                 </Button>
                 <Button
