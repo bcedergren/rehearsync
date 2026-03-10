@@ -154,7 +154,7 @@ function RegisterForm() {
           textAlign="center"
         >
           <Box mb={8}>
-            <NextLink href="/"><Image src="/logo_light.png" alt="RehearSync" width={240} height={60} /></NextLink>
+            <NextLink href="/"><Image src="/logo_light.png" alt="RehearSync" width={240} height={60} style={{ height: "auto" }} /></NextLink>
           </Box>
 
           <Box>
@@ -223,7 +223,7 @@ function RegisterForm() {
         <Box w="full" maxW="440px" position="relative" zIndex={1}>
           {/* Mobile logo */}
           <Box display={{ base: "block", lg: "none" }} mb={8}>
-            <NextLink href="/"><Image src="/logo_light.png" alt="RehearSync" width={200} height={50} /></NextLink>
+            <NextLink href="/"><Image src="/logo_light.png" alt="RehearSync" width={200} height={50} style={{ height: "auto" }} /></NextLink>
           </Box>
 
           <Heading size="xl" color="white" mb={1}>

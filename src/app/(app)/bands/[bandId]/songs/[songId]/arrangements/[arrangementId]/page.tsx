@@ -1038,63 +1038,7 @@ export default function ArrangementDetailPage() {
     );
   }
 
-  function renderProcessingStatus(
-    isProcessing: boolean,
-    error: string | null,
-    processingLabel: string,
-    processingHint: string,
-    errorLabel: string,
-    onRetry?: () => void,
-    progressPct?: number | null,
-    progressMsg?: string | null
-  ) {
-    if (isProcessing) {
-      const hasProgress = progressPct != null && progressPct >= 0;
-      return (
-        <Box p={3} borderRadius="md" bg="blue.50" border="1px solid" borderColor="blue.100">
-          <Flex align="center" gap={3}>
-            <Spinner size="sm" color="blue.500" />
-            <Box flex={1}>
-              <Flex align="center" gap={2}>
-                <Text fontWeight="medium" fontSize="xs" color="blue.700">{processingLabel}</Text>
-                {hasProgress && (
-                  <Text fontSize="xs" color="blue.600" fontWeight="semibold">{progressPct}%</Text>
-                )}
-              </Flex>
-              <Text fontSize="xs" color="blue.500">
-                {progressMsg || processingHint}
-              </Text>
-            </Box>
-          </Flex>
-          {hasProgress && (
-            <Box mt={2}>
-              <Progress.Root value={progressPct} size="xs" colorPalette="blue" borderRadius="full">
-                <Progress.Track borderRadius="full">
-                  <Progress.Range />
-                </Progress.Track>
-              </Progress.Root>
-            </Box>
-          )}
-        </Box>
-      );
-    }
-    if (error) {
-      return (
-        <Flex align="center" p={3} borderRadius="md" bg="red.50" border="1px solid" borderColor="red.100">
-          <Box flex={1}>
-            <Text fontWeight="medium" fontSize="xs" color="red.700">{errorLabel}</Text>
-            <Text fontSize="xs" color="red.500">{error}</Text>
-          </Box>
-          {onRetry && (
-            <Button size="xs" variant="outline" colorPalette="red" onClick={onRetry}>
-              Retry
-            </Button>
-          )}
-        </Flex>
-      );
-    }
-    return null;
-  }
+  // Processing status is now rendered as floating toasts at the bottom of the page
 
   // --- AI extras for each step ---
 
@@ -1118,7 +1062,6 @@ export default function ArrangementDetailPage() {
             </Button>
           </Flex>
         )}
-        {renderProcessingStatus(isStemProcessing, stemProcessingError, "Separating stems...", "Usually takes 1-3 minutes. You can leave and come back.", "Stem separation failed", fullMix ? () => startStemSeparation(fullMix.id, "stem_separation") : undefined, stemProgress, stemProgressLabel)}
         {hasStems && (
           <Flex align="center" gap={2} p={3} borderRadius="md" bg="green.50" border="1px solid" borderColor="green.100">
             <Text fontSize="xs" color="green.700" fontWeight="medium">{stems.length} stems separated</Text>
@@ -1186,7 +1129,6 @@ export default function ArrangementDetailPage() {
             </Button>
           </Flex>
         )}
-        {renderProcessingStatus(isTranscribing || isRegenerating, transcriptionError, "Transcribing audio to sheet music...", "AI is detecting notes and generating MusicXML. May take 2-5 minutes.", "Transcription failed", undefined, transcriptionProgress, transcriptionProgressLabel)}
         {hasCharts && stemsWithCharts.length > 0 && !isTranscribing && !isRegenerating && (
           <Flex align="center" gap={2} p={3} borderRadius="md" bg="gray.50" border="1px solid" borderColor="gray.200">
             <Box flex={1}>
@@ -1224,7 +1166,6 @@ export default function ArrangementDetailPage() {
             </Button>
           </Flex>
         )}
-        {renderProcessingStatus(isBeatProcessing, beatProcessingError, "Generating sync map...", "Detecting beats and mapping bar positions. Usually under a minute.", "Beat detection failed", fullMix ? () => startBeatDetection(fullMix.id, "beat_detection") : undefined, beatProgress, beatProgressLabel)}
         {hasSyncMap && (
           <Flex align="center" gap={2} p={3} borderRadius="md" bg="green.50" border="1px solid" borderColor="green.100">
             <Text fontSize="xs" color="green.700" fontWeight="medium">Sync map active</Text>
@@ -1252,28 +1193,6 @@ export default function ArrangementDetailPage() {
             </Box>
             <Button size="xs" colorPalette="purple" onClick={handleGenerateSections}>
               Generate
-            </Button>
-          </Flex>
-        )}
-        {isGeneratingSections && (
-          <Box p={3} borderRadius="md" bg="blue.50" border="1px solid" borderColor="blue.100">
-            <Flex align="center" gap={3}>
-              <Spinner size="sm" color="blue.500" />
-              <Box>
-                <Text fontWeight="medium" fontSize="xs" color="blue.700">Analyzing song structure...</Text>
-                <Text fontSize="xs" color="blue.500">AI is identifying sections from your audio and charts.</Text>
-              </Box>
-            </Flex>
-          </Box>
-        )}
-        {sectionGenError && (
-          <Flex align="center" p={3} borderRadius="md" bg="red.50" border="1px solid" borderColor="red.100">
-            <Box flex={1}>
-              <Text fontWeight="medium" fontSize="xs" color="red.700">Section generation failed</Text>
-              <Text fontSize="xs" color="red.500">{sectionGenError}</Text>
-            </Box>
-            <Button size="xs" variant="outline" colorPalette="red" onClick={handleGenerateSections}>
-              Retry
             </Button>
           </Flex>
         )}
@@ -1514,18 +1433,6 @@ export default function ArrangementDetailPage() {
             })}
           </SimpleGrid>
 
-          {/* Processing status toasts */}
-          <VStack gap={2} align="stretch">
-            {renderProcessingStatus(isStemProcessing, stemProcessingError, "Separating stems...", "Usually takes 1-3 minutes.", "Stem separation failed", fullMix ? () => startStemSeparation(fullMix.id, "stem_separation") : undefined, stemProgress, stemProgressLabel)}
-            {renderProcessingStatus(isTranscribing || isRegenerating, transcriptionError, "Transcribing audio to sheet music...", "May take 2-5 minutes.", "Transcription failed", undefined, transcriptionProgress, transcriptionProgressLabel)}
-            {renderProcessingStatus(isBeatProcessing, beatProcessingError, "Generating sync map...", "Usually under a minute.", "Beat detection failed", fullMix ? () => startBeatDetection(fullMix.id, "beat_detection") : undefined, beatProgress, beatProgressLabel)}
-            {isGeneratingSections && (
-              <Flex align="center" gap={3} p={3} borderRadius="md" bg="blue.50" border="1px solid" borderColor="blue.100">
-                <Spinner size="sm" color="blue.500" />
-                <Text fontSize="xs" color="blue.700" fontWeight="medium">Analyzing song structure...</Text>
-              </Flex>
-            )}
-          </VStack>
         </Box>
       )}
 
@@ -2393,6 +2300,71 @@ export default function ArrangementDetailPage() {
           </Dialog.Content>
         </Dialog.Positioner>
       </Dialog.Root>
+      {/* Floating processing toast stack */}
+      {(() => {
+        const toasts: { key: string; isProcessing: boolean; error: string | null; label: string; hint: string; errorLabel: string; onRetry?: () => void; pct?: number | null; pctMsg?: string | null }[] = [
+          { key: "stems", isProcessing: isStemProcessing, error: stemProcessingError, label: "Separating stems...", hint: "Usually takes 1-3 minutes.", errorLabel: "Stem separation failed", onRetry: fullMix ? () => startStemSeparation(fullMix.id, "stem_separation") : undefined, pct: stemProgress, pctMsg: stemProgressLabel },
+          { key: "transcription", isProcessing: isTranscribing || isRegenerating, error: transcriptionError, label: "Transcribing audio to sheet music...", hint: "May take 2-5 minutes.", errorLabel: "Transcription failed", pct: transcriptionProgress, pctMsg: transcriptionProgressLabel },
+          { key: "beats", isProcessing: isBeatProcessing, error: beatProcessingError, label: "Generating sync map...", hint: "Usually under a minute.", errorLabel: "Beat detection failed", onRetry: fullMix ? () => startBeatDetection(fullMix.id, "beat_detection") : undefined, pct: beatProgress, pctMsg: beatProgressLabel },
+          { key: "sections", isProcessing: isGeneratingSections, error: sectionGenError, label: "Analyzing song structure...", hint: "AI is identifying sections.", errorLabel: "Section generation failed", onRetry: handleGenerateSections },
+        ];
+        const active = toasts.filter((t) => t.isProcessing || t.error);
+        if (active.length === 0) return null;
+        return (
+          <VStack
+            position="fixed"
+            bottom={4}
+            right={4}
+            zIndex={9998}
+            gap={2}
+            align="stretch"
+            maxW="360px"
+            w="full"
+          >
+            {active.map((t) => {
+              if (t.isProcessing) {
+                const hasProgress = t.pct != null && t.pct >= 0;
+                return (
+                  <Box key={t.key} p={3} borderRadius="lg" bg="white" shadow="xl" border="1px solid" borderColor="blue.200">
+                    <Flex align="center" gap={3}>
+                      <Spinner size="sm" color="blue.500" />
+                      <Box flex={1}>
+                        <Flex align="center" gap={2}>
+                          <Text fontWeight="medium" fontSize="xs" color="blue.700">{t.label}</Text>
+                          {hasProgress && <Text fontSize="xs" color="blue.600" fontWeight="semibold">{t.pct}%</Text>}
+                        </Flex>
+                        <Text fontSize="xs" color="gray.500">{t.pctMsg || t.hint}</Text>
+                      </Box>
+                    </Flex>
+                    {hasProgress && (
+                      <Box mt={2}>
+                        <Progress.Root value={t.pct!} size="xs" colorPalette="blue" borderRadius="full">
+                          <Progress.Track borderRadius="full">
+                            <Progress.Range />
+                          </Progress.Track>
+                        </Progress.Root>
+                      </Box>
+                    )}
+                  </Box>
+                );
+              }
+              return (
+                <Box key={t.key} p={3} borderRadius="lg" bg="white" shadow="xl" border="1px solid" borderColor="red.200">
+                  <Flex align="center" gap={2}>
+                    <Box flex={1}>
+                      <Text fontWeight="medium" fontSize="xs" color="red.700">{t.errorLabel}</Text>
+                      <Text fontSize="xs" color="red.500">{t.error}</Text>
+                    </Box>
+                    {t.onRetry && (
+                      <Button size="xs" variant="outline" colorPalette="red" onClick={t.onRetry}>Retry</Button>
+                    )}
+                  </Flex>
+                </Box>
+              );
+            })}
+          </VStack>
+        );
+      })()}
     </Box>
   );
 }

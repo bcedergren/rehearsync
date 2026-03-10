@@ -80,7 +80,7 @@ export default function ForgotPasswordPage() {
           textAlign="center"
         >
           <Box mb={8}>
-            <NextLink href="/"><Image src="/logo_light.png" alt="RehearSync" width={240} height={60} /></NextLink>
+            <NextLink href="/"><Image src="/logo_light.png" alt="RehearSync" width={240} height={60} style={{ height: "auto" }} /></NextLink>
           </Box>
           <Box>
             <Heading size={{ base: "xl", xl: "2xl" }} color="white" mb={4} lineHeight="1.2">
@@ -120,7 +120,7 @@ export default function ForgotPasswordPage() {
 
         <Box w="full" maxW="400px" position="relative" zIndex={1}>
           <Box display={{ base: "block", lg: "none" }} mb={8}>
-            <NextLink href="/"><Image src="/logo_light.png" alt="RehearSync" width={200} height={50} /></NextLink>
+            <NextLink href="/"><Image src="/logo_light.png" alt="RehearSync" width={200} height={50} style={{ height: "auto" }} /></NextLink>
           </Box>
 
           {sent ? (

@@ -95,6 +95,16 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     return response.created({ jobId: job.id, status: "running" });
   } catch (err) {
     console.error("[processing/start] Failed to create prediction:", err);
+    const isRateLimit =
+      err instanceof Error &&
+      "response" in err &&
+      (err as { response?: { status?: number } }).response?.status === 429;
+    if (isRateLimit) {
+      await processingService.updateJobStatus(job.id, "failed", {
+        errorMessage: "Rate limited by AI provider. Please wait a moment and try again.",
+      });
+      return response.error("rate_limited", "Too many requests. Please wait a moment and try again.", 429);
+    }
     const message =
       err instanceof Error ? err.message : "Failed to start processing";
     await processingService.updateJobStatus(job.id, "failed", {
