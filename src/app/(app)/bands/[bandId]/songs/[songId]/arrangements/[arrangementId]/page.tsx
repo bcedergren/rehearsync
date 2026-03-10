@@ -677,9 +677,20 @@ export default function ArrangementDetailPage() {
 
   // Derived state (computed before early return so hooks below always run)
   const fullMix = arrangement?.audioAssets.find((a) => a.assetRole === "full_mix");
-  const stems = arrangement?.audioAssets.filter((a) => a.assetRole === "stem") ?? [];
+  const stems = (arrangement?.audioAssets.filter((a) => a.assetRole === "stem") ?? []).sort((a, b) => {
+    const aIsOther = (a.stemName ?? "").toLowerCase() === "other";
+    const bIsOther = (b.stemName ?? "").toLowerCase() === "other";
+    if (aIsOther !== bIsOther) return aIsOther ? 1 : -1;
+    return (a.stemName ?? "").localeCompare(b.stemName ?? "");
+  });
   const hasStems = stems.length > 0;
-  const hasParts = (arrangement?.parts.length ?? 0) > 0;
+  const sortedParts = useMemo(() => [...(arrangement?.parts ?? [])].sort((a, b) => {
+    const aIsOther = a.instrumentName.toLowerCase() === "other";
+    const bIsOther = b.instrumentName.toLowerCase() === "other";
+    if (aIsOther !== bIsOther) return aIsOther ? 1 : -1;
+    return a.instrumentName.localeCompare(b.instrumentName);
+  }), [arrangement?.parts]);
+  const hasParts = sortedParts.length > 0;
   const hasCharts = arrangement?.parts.some((p) => p.sheetMusicAssets.length > 0) ?? false;
   const hasAudio = (arrangement?.audioAssets.length ?? 0) > 0;
   const hasAssignments = arrangement?.parts.some((p) => p.assignments.length > 0) ?? false;
@@ -1479,7 +1490,7 @@ export default function ArrangementDetailPage() {
         <Card.Root bg="white" borderWidth="1px" borderColor="gray.100" flex="0 0 auto" w={{ base: "100%", lg: "380px" }}>
           <Card.Body p={5}>
             <Heading size="sm" color="gray.800" mb={4}>Parts & Assignments</Heading>
-            {arrangement.parts.length === 0 ? (
+            {sortedParts.length === 0 ? (
               <Flex direction="column" align="center" justify="center" p={8} bg="gray.50" borderRadius="lg" textAlign="center">
                 <Text fontSize="2xl" mb={2}>🎵</Text>
                 <Text fontSize="sm" color="gray.500" mb={3}>
@@ -1505,7 +1516,7 @@ export default function ArrangementDetailPage() {
                   </Table.Row>
                 </Table.Header>
                 <Table.Body>
-                  {arrangement.parts.map((part) => (
+                  {sortedParts.map((part) => (
                     <Table.Row key={part.id}>
                       <Table.Cell>
                         <Flex align="center" gap={2}>
@@ -1588,7 +1599,13 @@ export default function ArrangementDetailPage() {
                       role: a.assetRole,
                     }));
                     const hasStems = all.some((t) => t.role === "stem");
-                    return hasStems ? all.filter((t) => t.role !== "full_mix") : all;
+                    const filtered = hasStems ? all.filter((t) => t.role !== "full_mix") : all;
+                    return filtered.sort((a, b) => {
+                      const aIsOther = a.label.toLowerCase() === "other";
+                      const bIsOther = b.label.toLowerCase() === "other";
+                      if (aIsOther !== bIsOther) return aIsOther ? 1 : -1;
+                      return a.label.localeCompare(b.label);
+                    });
                   })()}
                   seekTo={audioSeekTo}
                 />
@@ -1692,7 +1709,7 @@ export default function ArrangementDetailPage() {
                       Current Charts
                     </Text>
                     <VStack gap={2} align="stretch">
-                      {arrangement.parts.filter((p) => p.sheetMusicAssets.length > 0).map((part) => (
+                      {sortedParts.filter((p) => p.sheetMusicAssets.length > 0).map((part) => (
                         <Flex key={part.id} align="center" justify="space-between" p={2} bg="green.50" borderRadius="md" border="1px solid" borderColor="green.100">
                           <Flex align="center" gap={2}>
                             <Badge colorPalette="green" variant="subtle" fontSize="xs">
@@ -2313,12 +2330,13 @@ export default function ArrangementDetailPage() {
         return (
           <VStack
             position="fixed"
-            bottom={4}
-            right={4}
+            top="66px"
+            left="50%"
+            transform="translateX(-50%)"
             zIndex={9998}
             gap={2}
             align="stretch"
-            maxW="360px"
+            maxW="400px"
             w="full"
           >
             {active.map((t) => {
