@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { Box, Flex, Text, Button, Spinner } from "@chakra-ui/react";
 import { Document, Page, pdfjs } from "react-pdf";
+import { Maximize, Minimize } from "lucide-react";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 
@@ -21,18 +22,50 @@ export function SheetMusicViewer({
   fileName,
   currentBar,
 }: SheetMusicViewerProps) {
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    function onFsChange() {
+      setIsFullscreen(!!document.fullscreenElement);
+    }
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => document.removeEventListener("fullscreenchange", onFsChange);
+  }, []);
+
+  function toggleFullscreen() {
+    if (!wrapperRef.current) return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      wrapperRef.current.requestFullscreen();
+    }
+  }
+
   if (fileType === "musicxml") {
     return (
-      <MusicXmlViewer
-        fileUrl={fileUrl}
-        fileName={fileName}
-        currentBar={currentBar}
-      />
+      <Box ref={wrapperRef} bg={isFullscreen ? "white" : undefined} h={isFullscreen ? "100vh" : undefined} overflow={isFullscreen ? "auto" : undefined}>
+        <MusicXmlViewer
+          fileUrl={fileUrl}
+          fileName={fileName}
+          currentBar={currentBar}
+          isFullscreen={isFullscreen}
+          onToggleFullscreen={toggleFullscreen}
+        />
+      </Box>
     );
   }
 
   return (
-    <PdfViewer fileUrl={fileUrl} fileName={fileName} currentBar={currentBar} />
+    <Box ref={wrapperRef} bg={isFullscreen ? "white" : undefined} h={isFullscreen ? "100vh" : undefined} overflow={isFullscreen ? "auto" : undefined}>
+      <PdfViewer
+        fileUrl={fileUrl}
+        fileName={fileName}
+        currentBar={currentBar}
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={toggleFullscreen}
+      />
+    </Box>
   );
 }
 
@@ -40,10 +73,14 @@ function MusicXmlViewer({
   fileUrl,
   fileName,
   currentBar,
+  isFullscreen,
+  onToggleFullscreen,
 }: {
   fileUrl: string;
   fileName?: string;
   currentBar?: number | null;
+  isFullscreen: boolean;
+  onToggleFullscreen: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const osmdRef = useRef<import("opensheetmusicdisplay").OpenSheetMusicDisplay | null>(null);
@@ -106,12 +143,24 @@ function MusicXmlViewer({
     };
   }, [fileUrl]);
 
+  // Re-render on zoom change
   useEffect(() => {
     if (osmdRef.current) {
       osmdRef.current.zoom = zoom;
       osmdRef.current.render();
     }
   }, [zoom]);
+
+  // Re-render when entering/exiting fullscreen (container size changes)
+  useEffect(() => {
+    if (osmdRef.current && !loading) {
+      // Small delay to let the DOM resize settle
+      const timer = setTimeout(() => {
+        osmdRef.current?.render();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isFullscreen, loading]);
 
   useEffect(() => {
     if (!osmdRef.current || currentBar == null) return;
@@ -128,8 +177,8 @@ function MusicXmlViewer({
   }, [currentBar]);
 
   return (
-    <Box w="full">
-      <Flex justify="space-between" align="center" mb={2} px={1}>
+    <Box w="full" h={isFullscreen ? "100%" : undefined} display="flex" flexDirection="column">
+      <Flex justify="space-between" align="center" mb={2} px={isFullscreen ? 4 : 1} pt={isFullscreen ? 3 : 0}>
         <Flex align="center" gap={2}>
           {fileName && (
             <Text fontSize="sm" fontWeight="medium" color="gray.600">
@@ -162,15 +211,24 @@ function MusicXmlViewer({
           >
             +
           </Button>
+          <Button
+            size="xs"
+            variant="outline"
+            onClick={onToggleFullscreen}
+            title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+          >
+            {isFullscreen ? <Minimize size={14} /> : <Maximize size={14} />}
+          </Button>
         </Flex>
       </Flex>
 
       <Box
         w="full"
-        minH="400px"
+        flex={isFullscreen ? 1 : undefined}
+        minH={isFullscreen ? undefined : "400px"}
         bg="white"
-        borderRadius="md"
-        border="1px solid"
+        borderRadius={isFullscreen ? undefined : "md"}
+        border={isFullscreen ? undefined : "1px solid"}
         borderColor="gray.200"
         overflow="auto"
         position="relative"
@@ -205,10 +263,14 @@ function PdfViewer({
   fileUrl,
   fileName,
   currentBar,
+  isFullscreen,
+  onToggleFullscreen,
 }: {
   fileUrl: string;
   fileName?: string;
   currentBar?: number | null;
+  isFullscreen: boolean;
+  onToggleFullscreen: () => void;
 }) {
   const [numPages, setNumPages] = useState<number>(0);
   const [pageNumber, setPageNumber] = useState(1);
@@ -229,13 +291,14 @@ function PdfViewer({
   }, []);
 
   return (
-    <Box w="full">
+    <Box w="full" h={isFullscreen ? "100%" : undefined} display="flex" flexDirection="column">
       {/* Header */}
       <Flex
         justify="space-between"
         align="center"
         mb={2}
-        px={1}
+        px={isFullscreen ? 4 : 1}
+        pt={isFullscreen ? 3 : 0}
       >
         <Flex align="center" gap={2}>
           {fileName && (
@@ -249,38 +312,49 @@ function PdfViewer({
             </Text>
           )}
         </Flex>
-        {numPages > 1 && (
-          <Flex align="center" gap={2}>
-            <Button
-              size="xs"
-              variant="outline"
-              onClick={() => setPageNumber((p) => Math.max(1, p - 1))}
-              disabled={pageNumber <= 1}
-            >
-              Prev
-            </Button>
-            <Text fontSize="xs" color="gray.500">
-              {pageNumber} / {numPages}
-            </Text>
-            <Button
-              size="xs"
-              variant="outline"
-              onClick={() => setPageNumber((p) => Math.min(numPages, p + 1))}
-              disabled={pageNumber >= numPages}
-            >
-              Next
-            </Button>
-          </Flex>
-        )}
+        <Flex align="center" gap={2}>
+          {numPages > 1 && (
+            <>
+              <Button
+                size="xs"
+                variant="outline"
+                onClick={() => setPageNumber((p) => Math.max(1, p - 1))}
+                disabled={pageNumber <= 1}
+              >
+                Prev
+              </Button>
+              <Text fontSize="xs" color="gray.500">
+                {pageNumber} / {numPages}
+              </Text>
+              <Button
+                size="xs"
+                variant="outline"
+                onClick={() => setPageNumber((p) => Math.min(numPages, p + 1))}
+                disabled={pageNumber >= numPages}
+              >
+                Next
+              </Button>
+            </>
+          )}
+          <Button
+            size="xs"
+            variant="outline"
+            onClick={onToggleFullscreen}
+            title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+          >
+            {isFullscreen ? <Minimize size={14} /> : <Maximize size={14} />}
+          </Button>
+        </Flex>
       </Flex>
 
       {/* PDF Document */}
       <Box
         w="full"
-        minH="400px"
+        flex={isFullscreen ? 1 : undefined}
+        minH={isFullscreen ? undefined : "400px"}
         bg="white"
-        borderRadius="md"
-        border="1px solid"
+        borderRadius={isFullscreen ? undefined : "md"}
+        border={isFullscreen ? undefined : "1px solid"}
         borderColor="gray.200"
         overflow="auto"
         display="flex"
@@ -316,7 +390,7 @@ function PdfViewer({
           >
             <Page
               pageNumber={pageNumber}
-              width={800}
+              width={isFullscreen ? Math.min(window.innerWidth - 64, 1200) : 800}
               renderTextLayer={true}
               renderAnnotationLayer={true}
             />

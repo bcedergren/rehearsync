@@ -6,13 +6,17 @@ Rehearsal management platform for bands. Organize songs, arrangements, parts, an
 
 - **Band Management** — Create bands, invite members by email, assign roles (leader, admin, musician)
 - **Onboarding Wizard** — Setup flow for new and existing bands: name your band, add members, assign instruments, send email invites. Detects existing bands and switches to edit mode automatically
-- **Dashboard Hub** — Single-band view with stats, members with instruments, songs list with key/time signature badges, and quick access to the setup wizard
+- **Dashboard Hub** — Single-band view with stats, members with instruments, songs list with key/time signature badges, getting-started checklist for new users, and 3-step onboarding guide
 - **Song & Arrangement Library** — Track songs with key, time signature, BPM, multiple arrangements, sections, and parts
 - **Sheet Music & Audio Assets** — Upload PDFs, MusicXML, and audio files with versioning
+- **Fully Automated AI Pipeline** — Upload a full mix and everything cascades automatically: stem separation, beat detection, part creation, member assignment, sheet music transcription, and section analysis
 - **AI Audio Processing** — Separate stems (Demucs), auto-detect beats (Essentia) for sync maps
 - **AI Section Analysis** — Automatically identify song sections (Intro, Verse, Chorus, etc.) from audio and sheet music using GPT-4o
+- **AI Transcription** — Audio-to-MusicXML sheet music generation via piano transcription and GPT-4o
 - **Audio Waveform Player** — Interactive waveform visualization (WaveSurfer.js) with track selector (full mix + individual stems), volume control, and playback position sync
+- **Drag-and-Drop Upload** — Full-width drop zone on arrangement page for uploading audio — triggers the entire AI pipeline with a single drop
 - **Auto-Assignment** — Automatically assigns band members to arrangement parts by matching their default instrument to stem-generated parts
+- **Fullscreen Sheet Music** — View PDF and MusicXML charts in fullscreen with bar-position highlighting
 - **Score Sync Maps** — Map audio timestamps to bar numbers for synchronized playback
 - **Real-Time Rehearsal Sessions** — WebSocket-powered transport with synchronized state
 - **Email Notifications** — Welcome emails, password reset flow, and band invite emails via Resend
@@ -121,9 +125,9 @@ RehearSync uses Replicate and OpenAI to process audio:
 1. **Stem Separation** — Demucs splits a full mix into vocals, drums, bass, guitar, piano, and other (6 stems)
 2. **Beat Detection** — Essentia estimates BPM and generates bar-level sync maps
 3. **Section Analysis** — GPT-4o analyzes audio metadata and MusicXML to identify song sections (Intro, Verse, Chorus, etc.)
-4. **Transcription** — Audio-to-MusicXML conversion (currently disabled pending model availability)
+4. **Transcription** — Piano transcription converts stems to MIDI, then GPT-4o generates MusicXML sheet music
 
-Processing runs asynchronously via Replicate webhooks handled by a Supabase Edge Function, keeping Vercel serverless functions within timeout limits.
+All 6 steps auto-trigger when a full mix is uploaded — stem separation and beat detection start in parallel, then parts, assignments, transcription, and sections cascade as each step completes. Processing runs asynchronously via Replicate webhooks handled by a Supabase Edge Function, keeping Vercel serverless functions within timeout limits.
 
 ## License
 

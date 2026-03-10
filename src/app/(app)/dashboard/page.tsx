@@ -129,35 +129,60 @@ export default function DashboardPage() {
 
       {/* ── No bands: empty state → launch wizard ── */}
       {(!bands || bands.length === 0) && (
-        <Card.Root
-          p={12}
-          textAlign="center"
-          borderStyle="dashed"
-          borderWidth="2px"
-          borderColor="gray.200"
-          bg="white"
-        >
-          <Card.Body>
-            <Text fontSize="4xl" mb={4}>
-              🎸
-            </Text>
-            <Heading size="lg" mb={2} color="gray.700">
-              Welcome to RehearSync!
-            </Heading>
-            <Text color="gray.500" mb={2} maxW="400px" mx="auto">
-              Set up your band in just a few steps — add members, assign
-              instruments, and send invites.
-            </Text>
-            <Button
-              colorPalette="blue"
-              size="lg"
-              mt={4}
-              onClick={() => router.push(`/onboarding`)}
-            >
-              Set Up Your Band
-            </Button>
-          </Card.Body>
-        </Card.Root>
+        <VStack gap={6} align="stretch">
+          <Card.Root
+            p={10}
+            textAlign="center"
+            borderWidth="2px"
+            borderColor="blue.200"
+            bg="white"
+          >
+            <Card.Body>
+              <Heading size="lg" mb={2} color="gray.800">
+                Welcome to RehearSync!
+              </Heading>
+              <Text color="gray.500" mb={6} maxW="440px" mx="auto">
+                Get your band rehearsal-ready in minutes. Here&apos;s how it works:
+              </Text>
+              <SimpleGrid columns={{ base: 1, md: 3 }} gap={4} mb={8} textAlign="center">
+                <Box p={4} bg="blue.50" borderRadius="xl">
+                  <Text fontSize="2xl" mb={2}>1</Text>
+                  <Text fontWeight="semibold" fontSize="sm" color="gray.800" mb={1}>
+                    Set up your band
+                  </Text>
+                  <Text fontSize="xs" color="gray.500">
+                    Name your band, add members, and assign instruments
+                  </Text>
+                </Box>
+                <Box p={4} bg="purple.50" borderRadius="xl">
+                  <Text fontSize="2xl" mb={2}>2</Text>
+                  <Text fontWeight="semibold" fontSize="sm" color="gray.800" mb={1}>
+                    Add a song & upload audio
+                  </Text>
+                  <Text fontSize="xs" color="gray.500">
+                    Drop in your full mix — AI splits stems, creates parts & charts automatically
+                  </Text>
+                </Box>
+                <Box p={4} bg="green.50" borderRadius="xl">
+                  <Text fontSize="2xl" mb={2}>3</Text>
+                  <Text fontWeight="semibold" fontSize="sm" color="gray.800" mb={1}>
+                    Rehearse together
+                  </Text>
+                  <Text fontSize="xs" color="gray.500">
+                    Start a session — each member sees their own charts and hears their parts
+                  </Text>
+                </Box>
+              </SimpleGrid>
+              <Button
+                colorPalette="blue"
+                size="lg"
+                onClick={() => router.push(`/onboarding`)}
+              >
+                Set Up Your Band
+              </Button>
+            </Card.Body>
+          </Card.Root>
+        </VStack>
       )}
 
       {/* ── Single band hub ── */}
@@ -203,6 +228,81 @@ export default function DashboardPage() {
               </Card.Body>
             </Card.Root>
           </SimpleGrid>
+
+          {/* Getting started checklist — shown until user has songs */}
+          {(!songs || songs.length === 0) && (
+            <Card.Root bg="blue.50" borderWidth="1px" borderColor="blue.200">
+              <Card.Body p={6}>
+                <Heading size="sm" color="blue.800" mb={4}>
+                  Getting Started
+                </Heading>
+                <VStack align="stretch" gap={3}>
+                  <Flex align="center" gap={3}>
+                    <Flex
+                      w="24px" h="24px" borderRadius="full"
+                      bg={band.members.length > 1 ? "green.500" : "gray.300"}
+                      align="center" justify="center"
+                      fontSize="xs" fontWeight="bold" color="white" flexShrink={0}
+                    >
+                      {band.members.length > 1 ? "✓" : "1"}
+                    </Flex>
+                    <Box flex={1}>
+                      <Text fontSize="sm" fontWeight="medium" color={band.members.length > 1 ? "green.700" : "gray.800"}>
+                        Invite band members
+                      </Text>
+                      <Text fontSize="xs" color="gray.500">
+                        Add members and assign their instruments so parts auto-match
+                      </Text>
+                    </Box>
+                    {band.members.length <= 1 && (
+                      <Button size="xs" variant="outline" colorPalette="blue" onClick={() => router.push("/onboarding")}>
+                        Invite
+                      </Button>
+                    )}
+                  </Flex>
+                  <Flex align="center" gap={3}>
+                    <Flex
+                      w="24px" h="24px" borderRadius="full"
+                      bg="gray.300"
+                      align="center" justify="center"
+                      fontSize="xs" fontWeight="bold" color="white" flexShrink={0}
+                    >
+                      2
+                    </Flex>
+                    <Box flex={1}>
+                      <Text fontSize="sm" fontWeight="medium" color="gray.800">
+                        Add your first song
+                      </Text>
+                      <Text fontSize="xs" color="gray.500">
+                        Create a song, then upload a full mix — AI will separate stems, generate parts, charts & sections
+                      </Text>
+                    </Box>
+                    <Button size="xs" variant="outline" colorPalette="blue" onClick={() => router.push(`/bands/${band.id}`)}>
+                      Add Song
+                    </Button>
+                  </Flex>
+                  <Flex align="center" gap={3}>
+                    <Flex
+                      w="24px" h="24px" borderRadius="full"
+                      bg="gray.300"
+                      align="center" justify="center"
+                      fontSize="xs" fontWeight="bold" color="white" flexShrink={0}
+                    >
+                      3
+                    </Flex>
+                    <Box flex={1}>
+                      <Text fontSize="sm" fontWeight="medium" color="gray.800">
+                        Start a rehearsal session
+                      </Text>
+                      <Text fontSize="xs" color="gray.500">
+                        Once a song is published, create a session — each member sees their own charts in real time
+                      </Text>
+                    </Box>
+                  </Flex>
+                </VStack>
+              </Card.Body>
+            </Card.Root>
+          )}
 
           {/* Band members with instruments */}
           <Card.Root bg="white" borderWidth="1px" borderColor="gray.100">
