@@ -27,10 +27,12 @@ interface BandSummary {
   _count: { songs: number };
 }
 
-interface UserProfile {
-  id: string;
-  tier: string;
-  name: string | null;
+interface MeResponse {
+  user: {
+    id: string;
+    tier: string;
+    name: string | null;
+  };
 }
 
 const TIER_MAX_BANDS: Record<string, number> = {
@@ -51,7 +53,8 @@ export default function DashboardPage() {
     ["bands"],
     "/bands"
   );
-  const { data: user } = useApiQuery<UserProfile>(["me"], "/me");
+  const { data: meData } = useApiQuery<MeResponse>(["me"], "/me");
+  const user = meData?.user;
 
   const tier = user?.tier || "free";
   const maxBands = TIER_MAX_BANDS[tier] ?? 1;
