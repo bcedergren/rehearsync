@@ -121,7 +121,7 @@ export default function DashboardPage() {
           </Text>
         </Box>
         {bands && bands.length > 0 && canCreateBand && (
-          <Button colorPalette="blue" onClick={() => router.push(`/onboarding?tier=${tier}`)}>
+          <Button colorPalette="blue" onClick={() => router.push(`/onboarding`)}>
             + New Band
           </Button>
         )}
@@ -152,7 +152,7 @@ export default function DashboardPage() {
               colorPalette="blue"
               size="lg"
               mt={4}
-              onClick={() => router.push(`/onboarding?tier=${tier}`)}
+              onClick={() => router.push(`/onboarding`)}
             >
               Set Up Your Band
             </Button>
@@ -215,7 +215,7 @@ export default function DashboardPage() {
                   variant="outline"
                   size="xs"
                   colorPalette="blue"
-                  onClick={() => router.push(`/onboarding?tier=${tier}`)}
+                  onClick={() => router.push(`/onboarding`)}
                 >
                   Set Up Band
                 </Button>

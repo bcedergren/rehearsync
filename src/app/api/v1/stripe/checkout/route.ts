@@ -43,7 +43,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         quantity: 1,
       },
     ],
-    success_url: `${process.env.NEXTAUTH_URL}/onboarding?tier=${tier}`,
+    success_url: `${process.env.NEXTAUTH_URL}/onboarding`,
     cancel_url: `${process.env.NEXTAUTH_URL}/pricing`,
     subscription_data: {
       metadata: { userId: user.id, tier },

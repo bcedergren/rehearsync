@@ -12,9 +12,9 @@ import {
   Badge,
   Card,
 } from "@chakra-ui/react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState, useCallback } from "react";
-import { apiFetch } from "@/hooks/useApi";
+import { useRouter } from "next/navigation";
+import { useState, useCallback } from "react";
+import { apiFetch, useApiQuery } from "@/hooks/useApi";
 import { Plus, Trash2, Mail, Check } from "lucide-react";
 
 const TIER_MEMBER_LIMITS: Record<string, number> = {
@@ -35,17 +35,17 @@ function newMember(): MemberEntry {
 }
 
 export default function OnboardingPage() {
-  return (
-    <Suspense>
-      <OnboardingWizard />
-    </Suspense>
-  );
+  return <OnboardingWizard />;
+}
+
+interface MeResponse {
+  user: { id: string; tier: string; name: string | null };
 }
 
 function OnboardingWizard() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const tier = searchParams.get("tier") || "free";
+  const { data: meData } = useApiQuery<MeResponse>(["me"], "/me");
+  const tier = meData?.user?.tier || "free";
   const maxMembers = TIER_MEMBER_LIMITS[tier] || 2;
 
   const [step, setStep] = useState(0);
