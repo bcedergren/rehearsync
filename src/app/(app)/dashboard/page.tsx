@@ -103,13 +103,13 @@ export default function DashboardPage() {
           </Text>
         </Box>
         {bands && bands.length > 0 && canCreateBand && (
-          <Button colorPalette="blue" onClick={() => setShowCreate(true)}>
+          <Button colorPalette="blue" onClick={() => router.push(`/onboarding?tier=${tier}`)}>
             + New Band
           </Button>
         )}
       </Flex>
 
-      {/* ── No bands: empty state ── */}
+      {/* ── No bands: empty state → launch wizard ── */}
       {(!bands || bands.length === 0) && (
         <Card.Root
           p={12}
@@ -127,16 +127,16 @@ export default function DashboardPage() {
               Welcome to RehearSync!
             </Heading>
             <Text color="gray.500" mb={2} maxW="400px" mx="auto">
-              Create your first band to start uploading sheet music, assigning
-              parts, and organizing rehearsals.
+              Set up your band in just a few steps — add members, assign
+              instruments, and send invites.
             </Text>
             <Button
               colorPalette="blue"
               size="lg"
               mt={4}
-              onClick={() => setShowCreate(true)}
+              onClick={() => router.push(`/onboarding?tier=${tier}`)}
             >
-              Create Your First Band
+              Set Up Your Band
             </Button>
           </Card.Body>
         </Card.Root>

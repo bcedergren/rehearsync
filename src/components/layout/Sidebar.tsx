@@ -5,6 +5,7 @@ import Image from "next/image";
 import NextLink from "next/link";
 import { useParams, usePathname } from "next/navigation";
 import { Home, Music, Users } from "lucide-react";
+import { useApiQuery } from "@/hooks/useApi";
 
 interface NavItem {
   label: string;
@@ -15,7 +16,15 @@ interface NavItem {
 export function Sidebar() {
   const params = useParams();
   const pathname = usePathname();
-  const bandId = params.bandId as string | undefined;
+  const bandIdFromUrl = params.bandId as string | undefined;
+
+  // Fetch user's bands so we can show Songs/Members even on /dashboard
+  const { data: bands } = useApiQuery<{ id: string }[]>(["bands"], "/bands", {
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Use bandId from URL, or fall back to the user's single band
+  const bandId = bandIdFromUrl || (bands?.length === 1 ? bands[0].id : undefined);
 
   const navItems: NavItem[] = [
     { label: "Dashboard", href: "/dashboard", icon: <Home size={18} /> },
