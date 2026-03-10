@@ -407,16 +407,25 @@ function OnboardingWizard() {
               <Button variant="outline" flex={1} onClick={() => setStep(2)}>
                 Back
               </Button>
-              <Button
-                colorPalette="blue"
-                flex={1}
-                onClick={handleSubmit}
-                loading={submitting}
-              >
-                {members.some((m) => m.email.trim())
-                  ? "Create Band & Send Invites"
-                  : "Create Band"}
-              </Button>
+              {members.some((m) => m.email.trim()) ? (
+                <Button
+                  colorPalette="blue"
+                  flex={1}
+                  onClick={handleSubmit}
+                  loading={submitting}
+                >
+                  Create Band & Send Invites
+                </Button>
+              ) : (
+                <Button
+                  colorPalette="blue"
+                  flex={1}
+                  onClick={handleSubmit}
+                  loading={submitting}
+                >
+                  Skip & Create Band
+                </Button>
+              )}
             </Flex>
           </Card.Body>
         </Card.Root>
