@@ -11,7 +11,7 @@ import {
 } from "@chakra-ui/react";
 import { useSignedUrls } from "@/hooks/useSignedUrl";
 import { Play, Pause, Volume2 } from "lucide-react";
-import WaveSurfer from "wavesurfer.js";
+import type WaveSurfer from "wavesurfer.js";
 
 interface AudioTrack {
   id: string;
@@ -180,39 +180,47 @@ export function AudioPlayer({
       wavesurferReadyRef.current = false;
     }
 
+    let cancelled = false;
     const colors = WAVEFORM_COLORS[activeTrack.role] || WAVEFORM_COLORS.full_mix;
 
-    const ws = WaveSurfer.create({
-      container: waveformContainerRef.current,
-      waveColor: colors.wave,
-      progressColor: colors.progress,
-      cursorColor: colors.progress,
-      cursorWidth: 2,
-      barWidth: 2,
-      barGap: 1,
-      barRadius: 2,
-      height: 48,
-      normalize: true,
-      interact: true,
-      media: audio,
-      url: activeSignedUrl,
-    });
+    import("wavesurfer.js").then(({ default: WS }) => {
+      if (cancelled || !waveformContainerRef.current) return;
 
-    ws.on("ready", () => {
-      wavesurferReadyRef.current = true;
-    });
+      const ws = WS.create({
+        container: waveformContainerRef.current,
+        waveColor: colors.wave,
+        progressColor: colors.progress,
+        cursorColor: colors.progress,
+        cursorWidth: 2,
+        barWidth: 2,
+        barGap: 1,
+        barRadius: 2,
+        height: 48,
+        normalize: true,
+        interact: true,
+        media: audio,
+        url: activeSignedUrl,
+      });
 
-    // WaveSurfer handles seeking the media element automatically when using `media` option
-    ws.on("seeking", (currentTime: number) => {
-      setCurrentTime(currentTime);
-    });
+      ws.on("ready", () => {
+        wavesurferReadyRef.current = true;
+      });
 
-    wavesurferRef.current = ws;
+      // WaveSurfer handles seeking the media element automatically when using `media` option
+      ws.on("seeking", (currentTime: number) => {
+        setCurrentTime(currentTime);
+      });
+
+      wavesurferRef.current = ws;
+    });
 
     return () => {
-      ws.destroy();
-      wavesurferRef.current = null;
-      wavesurferReadyRef.current = false;
+      cancelled = true;
+      if (wavesurferRef.current) {
+        wavesurferRef.current.destroy();
+        wavesurferRef.current = null;
+        wavesurferReadyRef.current = false;
+      }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTrack?.id, activeSignedUrl]);
