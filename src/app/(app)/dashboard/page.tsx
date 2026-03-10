@@ -196,7 +196,7 @@ export default function DashboardPage() {
                   Songs
                 </Text>
                 <Text fontSize="2xl" fontWeight="bold" color="gray.800">
-                  {band._count.songs}
+                  {songs?.length ?? band._count.songs}
                 </Text>
               </Card.Body>
             </Card.Root>

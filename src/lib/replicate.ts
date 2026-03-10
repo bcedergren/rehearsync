@@ -6,7 +6,7 @@ const replicate = new Replicate({
 
 export const MODELS = {
   DEMUCS: "cjwbw/demucs:25a173108cff36ef9f80f854c162d01df9e6528be175794b81158fa03836d953",
-  PIANO_TRANSCRIPTION: "bytedance/piano-transcription:8978296ce461e1fd8caae879d59063bc8009f57b734c1c8a2c7b19de0016fd35",
+  BASIC_PITCH: "rhelsing/basic-pitch:a7cf33cf63fca9c71f2235332af5a9fdfb7d23c459a0dc429daa203ff8e80c78",
   ESSENTIA_BPM: "mtg/essentia-bpm:b3045c359817fea53678791886d50aa3e3a995dc4796fe74db0de156d5074a43",
 } as const;
 
@@ -34,9 +34,9 @@ export async function createStemSeparationPrediction(audioUrl: string) {
 
 export async function createTranscriptionPrediction(audioUrl: string) {
   const prediction = await replicate.predictions.create({
-    version: MODELS.PIANO_TRANSCRIPTION.split(":")[1],
+    version: MODELS.BASIC_PITCH.split(":")[1],
     input: {
-      audio_input: audioUrl,
+      audio_file: audioUrl,
     },
     webhook: getWebhookUrl(),
     webhook_events_filter: ["completed"],

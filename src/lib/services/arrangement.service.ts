@@ -60,6 +60,16 @@ export async function getArrangement(arrangementId: string) {
         },
       },
       sectionMarkers: { orderBy: { sortOrder: "asc" } },
+      syncMaps: {
+        where: { isActive: true },
+        take: 1,
+        include: {
+          points: {
+            orderBy: { barNumber: "asc" },
+            select: { barNumber: true, timeMs: true },
+          },
+        },
+      },
       song: { select: { id: true, title: true, bandId: true } },
     },
   });

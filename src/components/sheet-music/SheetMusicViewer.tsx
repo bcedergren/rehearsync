@@ -117,13 +117,42 @@ function MusicXmlViewer({
 
         osmdRef.current = osmd;
 
-        const response = await fetch(fileUrl);
-        if (!response.ok) throw new Error("Failed to fetch MusicXML file");
-        const xmlText = await response.text();
+        const res = await fetch(fileUrl);
+        if (!res.ok) throw new Error("Failed to fetch MusicXML file");
+
+        const contentType = res.headers.get("content-type") || "";
 
         if (cancelled) return;
 
-        await osmd.load(xmlText);
+        // Handle compressed MusicXML (.mxl) — OSMD can load it from ArrayBuffer
+        if (
+          contentType.includes("octet-stream") ||
+          contentType.includes("zip") ||
+          fileUrl.endsWith(".mxl")
+        ) {
+          const buffer = await res.arrayBuffer();
+          await osmd.load(new Uint8Array(buffer) as unknown as string);
+        } else {
+          let xmlText = await res.text();
+
+          // Strip markdown code fences that LLMs sometimes add
+          xmlText = xmlText.replace(/^```(?:xml|musicxml)?\s*\n?/i, "").replace(/\n?```\s*$/, "");
+
+          // Strip BOM and leading whitespace
+          xmlText = xmlText.replace(/^\uFEFF/, "").trim();
+
+          // Extract XML if there's extra text before the declaration
+          const xmlStart = xmlText.indexOf("<?xml");
+          if (xmlStart > 0) {
+            xmlText = xmlText.substring(xmlStart);
+          }
+
+          if (!xmlText.startsWith("<")) {
+            throw new Error("File does not appear to be valid MusicXML");
+          }
+
+          await osmd.load(xmlText);
+        }
         osmd.zoom = zoom;
         osmd.render();
         setLoading(false);

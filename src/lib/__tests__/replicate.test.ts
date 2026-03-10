@@ -28,9 +28,9 @@ describe("MODELS", () => {
     expect(MODELS.DEMUCS.split(":")[1]).toHaveLength(64);
   });
 
-  it("has PIANO_TRANSCRIPTION model with version hash", () => {
-    expect(MODELS.PIANO_TRANSCRIPTION).toContain("bytedance/piano-transcription:");
-    expect(MODELS.PIANO_TRANSCRIPTION.split(":")[1]).toHaveLength(64);
+  it("has BASIC_PITCH model with version hash", () => {
+    expect(MODELS.BASIC_PITCH).toContain("rhelsing/basic-pitch:");
+    expect(MODELS.BASIC_PITCH.split(":")[1]).toHaveLength(64);
   });
 
   it("has ESSENTIA_BPM model with version hash", () => {
@@ -54,13 +54,13 @@ describe("createStemSeparationPrediction", () => {
 });
 
 describe("createTranscriptionPrediction", () => {
-  it("creates prediction with MT3 model", async () => {
+  it("creates prediction with Basic Pitch model", async () => {
     const result = await createTranscriptionPrediction("https://example.com/stem.mp3");
 
     expect(result).toEqual({ id: "pred-123" });
     expect(mockCreate).toHaveBeenCalledWith({
-      version: MODELS.PIANO_TRANSCRIPTION.split(":")[1],
-      input: { audio_input: "https://example.com/stem.mp3" },
+      version: MODELS.BASIC_PITCH.split(":")[1],
+      input: { audio_file: "https://example.com/stem.mp3" },
       webhook: "https://test.supabase.co/functions/v1/replicate-webhook",
       webhook_events_filter: ["completed"],
     });

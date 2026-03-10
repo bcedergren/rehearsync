@@ -394,9 +394,174 @@ async function handleBeatDetection(
   };
 }
 
-// ─── Transcription Handler (Basic Pitch → MIDI → MusicXML) ─────
+// ─── MIDI → MusicXML Converter (deterministic, no LLM) ─────
 
-const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+const NOTE_NAMES = ["C", "D", "D", "E", "E", "F", "G", "G", "A", "A", "B", "B"];
+const NOTE_ALTERS = [0, -1, 0, -1, 0, 0, -1, 0, -1, 0, -1, 0];
+
+interface MidiLike {
+  header: { tempos: { bpm: number }[]; timeSignatures: { timeSignature: [number, number] }[] };
+  tracks: { notes: { midi: number; time: number; duration: number; velocity: number }[] }[];
+}
+
+function midiToMusicXml(midi: MidiLike): string {
+  // Collect all notes across tracks
+  const allNotes: { midi: number; time: number; duration: number; velocity: number }[] = [];
+  for (const track of midi.tracks) {
+    for (const note of track.notes) {
+      allNotes.push(note);
+    }
+  }
+  if (allNotes.length === 0) return "";
+  allNotes.sort((a, b) => a.time - b.time);
+
+  // Get tempo and time signature from MIDI header
+  const bpm = midi.header.tempos?.[0]?.bpm ?? 120;
+  const timeSig = midi.header.timeSignatures?.[0]?.timeSignature ?? [4, 4];
+  const beatsPerMeasure = timeSig[0];
+  const beatUnit = timeSig[1];
+
+  // Divisions per quarter note (resolution for MusicXML durations)
+  const divisions = 24; // supports whole, half, quarter, eighth, sixteenth, triplets
+  const secondsPerBeat = 60 / bpm;
+  const secondsPerMeasure = secondsPerBeat * beatsPerMeasure * (4 / beatUnit);
+
+  // Determine clef from pitch range
+  const avgPitch = allNotes.reduce((s, n) => s + n.midi, 0) / allNotes.length;
+  const clefSign = avgPitch < 60 ? "F" : "G";
+  const clefLine = avgPitch < 60 ? 4 : 2;
+
+  // Total duration
+  const lastNote = allNotes[allNotes.length - 1];
+  const totalDuration = lastNote.time + lastNote.duration;
+  const totalMeasures = Math.max(1, Math.ceil(totalDuration / secondsPerMeasure));
+
+  // Duration quantization table (in divisions): maps to standard note types
+  const durationTable: [number, string][] = [
+    [divisions * 4, "whole"],
+    [divisions * 3, "half"],       // dotted half
+    [divisions * 2, "half"],
+    [divisions * 1.5, "quarter"],  // dotted quarter
+    [divisions, "quarter"],
+    [divisions * 0.75, "eighth"],  // dotted eighth
+    [divisions / 2, "eighth"],
+    [divisions / 4, "16th"],
+  ];
+
+  function quantizeDuration(durationDivs: number): { dur: number; type: string; dot: boolean } {
+    for (const [d, t] of durationTable) {
+      if (durationDivs >= d * 0.8) {
+        const isDotted = t === "half" && durationDivs >= divisions * 2.5
+          || t === "quarter" && durationDivs >= divisions * 1.25
+          || t === "eighth" && durationDivs >= divisions * 0.625;
+        const actualDur = isDotted ? Math.round(d * 1.5) : d;
+        return { dur: Math.round(actualDur), type: t, dot: !!isDotted };
+      }
+    }
+    return { dur: Math.round(divisions / 4), type: "16th", dot: false };
+  }
+
+  function midiToPitch(m: number) {
+    const octave = Math.floor(m / 12) - 1;
+    const pc = m % 12;
+    return { step: NOTE_NAMES[pc], alter: NOTE_ALTERS[pc], octave };
+  }
+
+  // Bucket notes into measures
+  const measures: typeof allNotes[] = Array.from({ length: totalMeasures }, () => []);
+  for (const note of allNotes) {
+    const measureIdx = Math.min(Math.floor(note.time / secondsPerMeasure), totalMeasures - 1);
+    measures[measureIdx].push(note);
+  }
+
+  // Build MusicXML
+  let xml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="4.0">
+  <part-list>
+    <score-part id="P1"><part-name>Music</part-name></score-part>
+  </part-list>
+  <part id="P1">`;
+
+  for (let m = 0; m < totalMeasures; m++) {
+    xml += `\n    <measure number="${m + 1}">`;
+
+    // Attributes on first measure
+    if (m === 0) {
+      xml += `
+      <attributes>
+        <divisions>${divisions}</divisions>
+        <time><beats>${beatsPerMeasure}</beats><beat-type>${beatUnit}</beat-type></time>
+        <clef><sign>${clefSign}</sign><line>${clefLine}</line></clef>
+      </attributes>`;
+      if (m === 0) {
+        xml += `\n      <direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>${Math.round(bpm)}</per-minute></metronome></direction-type></direction>`;
+      }
+    }
+
+    const measureStart = m * secondsPerMeasure;
+    const measureDivisions = divisions * beatsPerMeasure * (4 / beatUnit);
+    const notes = measures[m];
+
+    if (notes.length === 0) {
+      // Full-measure rest
+      xml += `\n      <note><rest/><duration>${Math.round(measureDivisions)}</duration><type>whole</type></note>`;
+    } else {
+      let cursor = 0; // current position in divisions from measure start
+      for (let i = 0; i < notes.length; i++) {
+        const note = notes[i];
+        const noteStartDiv = Math.round(((note.time - measureStart) / secondsPerBeat) * divisions);
+
+        // Insert rest if there's a gap
+        if (noteStartDiv > cursor + 1) {
+          const restDur = noteStartDiv - cursor;
+          xml += `\n      <note><rest/><duration>${restDur}</duration></note>`;
+          cursor = noteStartDiv;
+        } else if (noteStartDiv > cursor) {
+          cursor = noteStartDiv;
+        }
+
+        const rawDurDiv = Math.round((note.duration / secondsPerBeat) * divisions);
+        // Clamp to remaining measure
+        const remainingInMeasure = Math.round(measureDivisions) - cursor;
+        const clampedDur = Math.min(rawDurDiv, remainingInMeasure);
+        const { dur, type, dot } = quantizeDuration(Math.max(1, clampedDur));
+        const finalDur = Math.min(dur, remainingInMeasure);
+
+        const pitch = midiToPitch(note.midi);
+
+        // Check if this is a chord (same start time as previous note)
+        const isChord = i > 0 && Math.abs(notes[i].time - notes[i - 1].time) < 0.02;
+
+        xml += `\n      <note>`;
+        if (isChord) xml += `<chord/>`;
+        xml += `<pitch><step>${pitch.step}</step>`;
+        if (pitch.alter !== 0) xml += `<alter>${pitch.alter}</alter>`;
+        xml += `<octave>${pitch.octave}</octave></pitch>`;
+        xml += `<duration>${finalDur}</duration><type>${type}</type>`;
+        if (dot) xml += `<dot/>`;
+        xml += `</note>`;
+
+        if (!isChord) {
+          cursor += finalDur;
+        }
+      }
+
+      // Fill remaining measure with rest
+      const remaining = Math.round(measureDivisions) - cursor;
+      if (remaining > 1) {
+        xml += `\n      <note><rest/><duration>${remaining}</duration></note>`;
+      }
+    }
+
+    xml += `\n    </measure>`;
+  }
+
+  xml += `\n  </part>\n</score-partwise>`;
+  return xml;
+}
+
+// ─── Transcription Handler (Piano Transcription → MIDI → MusicXML) ─────
 
 async function handleTranscription(
   job: Record<string, unknown>,
@@ -410,7 +575,7 @@ async function handleTranscription(
     throw new Error("Could not determine bandId from job");
   }
 
-  // MT3 returns a single MIDI URL string; legacy basic-pitch returned an object
+  // Basic Pitch returns a single MIDI URL string
   const midiUrl = typeof output === "string"
     ? output
     : (output as Record<string, unknown>)?.midi_file as string | undefined;
@@ -451,84 +616,24 @@ async function handleTranscription(
     midiStorageKey: midiKey,
   };
 
-  // Parse MIDI to extract note events for MusicXML generation
-  let notesSummary: { start: number; end: number; pitch: number; velocity: number }[] = [];
+  // Parse MIDI and convert directly to MusicXML (no LLM — deterministic conversion)
+  let musicXmlContent = "";
   try {
     const midi = new Midi(new Uint8Array(midiData));
-    const allNotes: { start: number; end: number; pitch: number; velocity: number }[] = [];
-    for (const track of midi.tracks) {
-      for (const note of track.notes) {
-        allNotes.push({
-          start: Math.round(note.time * 1000) / 1000,
-          end: Math.round((note.time + note.duration) * 1000) / 1000,
-          pitch: note.midi,
-          velocity: Math.round(note.velocity * 127),
-        });
-      }
-    }
-    allNotes.sort((a, b) => a.start - b.start);
-    notesSummary = allNotes.slice(0, 500);
-    result.noteEventsCount = allNotes.length;
+    musicXmlContent = midiToMusicXml(midi);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    result.noteEventsCount = midi.tracks.reduce((sum: number, t: any) => sum + t.notes.length, 0);
   } catch (err) {
-    console.error("Failed to parse MIDI for note extraction:", err);
-  }
-
-  if (!OPENAI_API_KEY || notesSummary.length === 0) {
-    if (!OPENAI_API_KEY) {
-      result.skippedMusicXml = true;
-      result.reason = "OPENAI_API_KEY not configured";
-    } else {
-      result.skippedMusicXml = true;
-      result.reason = "No notes extracted from MIDI";
-    }
+    console.error("Failed to convert MIDI to MusicXML:", err);
+    result.skippedMusicXml = true;
+    result.reason = `MIDI conversion failed: ${err instanceof Error ? err.message : String(err)}`;
     return result;
   }
 
-  // Call OpenAI to convert note data to MusicXML
-  const openaiResponse = await fetch(
-    "https://api.openai.com/v1/chat/completions",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "system",
-            content: `You are a music transcription expert. Convert MIDI note data into valid MusicXML format.
-Rules:
-- Infer time signature and key signature from the note patterns
-- Quantize notes to the nearest readable rhythmic value (eighth notes minimum)
-- Use standard MusicXML 4.0 format
-- Include proper measure divisions, clef, and note durations
-- Output ONLY the MusicXML content, no explanations or markdown
-- The output must be a complete, valid MusicXML document`,
-          },
-          {
-            role: "user",
-            content: `Convert these detected notes to MusicXML. Notes are objects with start (seconds), end (seconds), pitch (MIDI number 0-127), and velocity (0-127):\n\n${JSON.stringify(notesSummary)}`,
-          },
-        ],
-        temperature: 0.2,
-        max_tokens: 16000,
-      }),
-    }
-  );
-
-  if (!openaiResponse.ok) {
-    const errText = await openaiResponse.text();
-    throw new Error(`OpenAI API error: ${openaiResponse.status} ${errText}`);
-  }
-
-  const openaiResult = await openaiResponse.json();
-  const musicXmlContent =
-    openaiResult.choices?.[0]?.message?.content?.trim() ?? "";
-
-  if (!musicXmlContent || !musicXmlContent.includes("<?xml")) {
-    throw new Error("OpenAI did not return valid MusicXML content");
+  if (!musicXmlContent) {
+    result.skippedMusicXml = true;
+    result.reason = "No notes extracted from MIDI";
+    return result;
   }
 
   // Upload MusicXML to Supabase Storage

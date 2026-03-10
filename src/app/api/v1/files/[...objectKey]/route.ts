@@ -20,6 +20,7 @@ export const GET = withAuth(async (_req: NextRequest, _ctx, params) => {
       pdf: "application/pdf",
       xml: "application/xml",
       musicxml: "application/vnd.recordare.musicxml+xml",
+      mxl: "application/vnd.recordare.musicxml",
       wav: "audio/wav",
       mp3: "audio/mpeg",
       m4a: "audio/mp4",
