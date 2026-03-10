@@ -64,6 +64,8 @@ export function AudioPlayer({
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState([80]);
   const seekingRef = useRef(false);
+  const pendingPlayRef = useRef(false);
+  const pendingTimeRef = useRef<number | null>(null);
 
   // Waveform refs
   const waveformContainerRef = useRef<HTMLDivElement | null>(null);
@@ -71,6 +73,7 @@ export function AudioPlayer({
   const wavesurferReadyRef = useRef(false);
 
   const activeTrack = tracks.find((t) => t.id === activeTrackId) || tracks[0];
+  const activeSignedUrl = activeTrack ? signedUrls[activeTrack.url] : null;
 
   // Auto-select first track
   useEffect(() => {
@@ -79,7 +82,7 @@ export function AudioPlayer({
     }
   }, [tracks, activeTrackId]);
 
-  // Update time display
+  // Update time display and handle canplay for pending operations
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -92,15 +95,27 @@ export function AudioPlayer({
     };
     const onDurationChange = () => setDuration(audio.duration || 0);
     const onEnded = () => setIsPlaying(false);
+    const onCanPlay = () => {
+      if (pendingTimeRef.current != null) {
+        audio.currentTime = pendingTimeRef.current;
+        pendingTimeRef.current = null;
+      }
+      if (pendingPlayRef.current) {
+        pendingPlayRef.current = false;
+        audio.play().then(() => setIsPlaying(true)).catch(() => {});
+      }
+    };
 
     audio.addEventListener("timeupdate", onTimeUpdate);
     audio.addEventListener("durationchange", onDurationChange);
     audio.addEventListener("ended", onEnded);
+    audio.addEventListener("canplay", onCanPlay);
 
     return () => {
       audio.removeEventListener("timeupdate", onTimeUpdate);
       audio.removeEventListener("durationchange", onDurationChange);
       audio.removeEventListener("ended", onEnded);
+      audio.removeEventListener("canplay", onCanPlay);
     };
   }, [onPositionChange]);
 
@@ -138,11 +153,25 @@ export function AudioPlayer({
     }
   }, [transportStatus, isPlaying]);
 
+  // Set audio src when active track or signed URL changes
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (activeSignedUrl) {
+      if (audio.src !== activeSignedUrl) {
+        audio.src = activeSignedUrl;
+        audio.load();
+      }
+    } else {
+      audio.removeAttribute("src");
+    }
+  }, [activeSignedUrl]);
+
   // Initialize / update WaveSurfer for the active track
   useEffect(() => {
-    if (!waveformContainerRef.current || !activeTrack) return;
-    const url = signedUrls[activeTrack.url];
-    if (!url) return;
+    if (!waveformContainerRef.current || !activeTrack || !activeSignedUrl) return;
+    const audio = audioRef.current;
+    if (!audio) return;
 
     // Destroy previous instance
     if (wavesurferRef.current) {
@@ -165,23 +194,17 @@ export function AudioPlayer({
       height: 48,
       normalize: true,
       interact: true,
-      // Use the existing audio element instead of creating a new one
-      media: audioRef.current || undefined,
+      media: audio,
+      url: activeSignedUrl,
     });
-
-    ws.load(url);
 
     ws.on("ready", () => {
       wavesurferReadyRef.current = true;
     });
 
-    // Clicking on the waveform seeks the audio element
-    ws.on("seeking", (progress: number) => {
-      if (audioRef.current) {
-        const newTime = progress;
-        audioRef.current.currentTime = newTime;
-        setCurrentTime(newTime);
-      }
+    // WaveSurfer handles seeking the media element automatically when using `media` option
+    ws.on("seeking", (currentTime: number) => {
+      setCurrentTime(currentTime);
     });
 
     wavesurferRef.current = ws;
@@ -192,7 +215,7 @@ export function AudioPlayer({
       wavesurferReadyRef.current = false;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTrack?.id, signedUrls[activeTrack?.url ?? ""]]);
+  }, [activeTrack?.id, activeSignedUrl]);
 
   const togglePlay = useCallback(() => {
     const audio = audioRef.current;
@@ -209,16 +232,16 @@ export function AudioPlayer({
     (trackId: string) => {
       const wasPlaying = isPlaying;
       const time = audioRef.current?.currentTime || 0;
+
+      if (wasPlaying) {
+        audioRef.current?.pause();
+        setIsPlaying(false);
+      }
+
+      // Queue position restore and auto-play for when the new source is ready
+      pendingTimeRef.current = time;
+      pendingPlayRef.current = wasPlaying;
       setActiveTrackId(trackId);
-      // After source change, restore position
-      setTimeout(() => {
-        if (audioRef.current) {
-          audioRef.current.currentTime = time;
-          if (wasPlaying) {
-            audioRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
-          }
-        }
-      }, 50);
     },
     [isPlaying]
   );
@@ -241,10 +264,8 @@ export function AudioPlayer({
 
   return (
     <Box w="full">
-      {/* Hidden audio element */}
-      {activeTrack && signedUrls[activeTrack.url] && (
-        <audio ref={audioRef} src={signedUrls[activeTrack.url]!} preload="metadata" />
-      )}
+      {/* Hidden audio element — always mounted so ref is stable */}
+      <audio ref={audioRef} preload="metadata" />
 
       {/* Track selector */}
       {tracks.length > 1 && (

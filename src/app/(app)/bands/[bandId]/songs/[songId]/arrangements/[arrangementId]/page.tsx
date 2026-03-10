@@ -1038,48 +1038,14 @@ export default function ArrangementDetailPage() {
                   </Button>
                 </Flex>
               ) : (
-                <Flex direction="column" gap={4} flex={1}>
-                  <VStack align="stretch" gap={0}>
-                    {arrangement.audioAssets.map((a, i) => (
-                      <Flex
-                        key={a.id}
-                        align="center"
-                        py={2.5}
-                        px={3}
-                        gap={3}
-                        borderBottom={i < arrangement.audioAssets.length - 1 ? "1px solid" : "none"}
-                        borderColor="gray.100"
-                      >
-                        <Badge
-                          colorPalette={
-                            a.assetRole === "full_mix" ? "blue" :
-                            a.assetRole === "stem" ? "purple" :
-                            a.assetRole === "click" ? "orange" : "green"
-                          }
-                          variant="subtle"
-                          fontSize="xs"
-                          minW="60px"
-                          textAlign="center"
-                        >
-                          {a.assetRole.replace("_", " ")}
-                        </Badge>
-                        <Text fontSize="sm" fontWeight="medium" flex={1}>
-                          {a.stemName || a.storageObject.originalFileName}
-                        </Text>
-                      </Flex>
-                    ))}
-                  </VStack>
-                  <Box mt="auto" pt={2} borderTop="1px solid" borderColor="gray.100">
-                    <AudioPlayer
-                      tracks={arrangement.audioAssets.map((a) => ({
-                        id: a.id,
-                        url: a.storageObject.objectKey,
-                        label: a.stemName || a.assetRole.replace("_", " "),
-                        role: a.assetRole,
-                      }))}
-                    />
-                  </Box>
-                </Flex>
+                <AudioPlayer
+                  tracks={arrangement.audioAssets.map((a) => ({
+                    id: a.id,
+                    url: a.storageObject.objectKey,
+                    label: a.stemName || a.assetRole.replace("_", " "),
+                    role: a.assetRole,
+                  }))}
+                />
               )}
             </Card.Body>
           </Card.Root>
