@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { NotFoundError, ValidationError } from "@/lib/api/errors";
 import { randomBytes } from "crypto";
 import type { InviteLinkType } from "@/lib/validators/invite";
+import { getTierLimits } from "@/lib/subscriptions/tiers";
 
 function generateCode(): string {
   return randomBytes(9).toString("base64url"); // 12 chars, URL-safe
@@ -98,6 +99,23 @@ export async function redeemBandInvite(
 
   if (existing) {
     return { member: existing, alreadyMember: true, bandId: link.bandId };
+  }
+
+  // Enforce member limit based on the band leader's tier
+  const leader = await prisma.member.findFirst({
+    where: { bandId: link.bandId, role: "leader", isActive: true },
+    include: { user: { select: { tier: true } } },
+  });
+  if (leader) {
+    const limits = getTierLimits(leader.user.tier);
+    const currentCount = await prisma.member.count({
+      where: { bandId: link.bandId, isActive: true },
+    });
+    if (limits.maxMembersPerBand !== Infinity && currentCount >= limits.maxMembersPerBand) {
+      throw new ValidationError(
+        `This band has reached its member limit (${limits.maxMembersPerBand}). Ask the band leader to upgrade their plan.`
+      );
+    }
   }
 
   // Check for inactive membership (re-join)
