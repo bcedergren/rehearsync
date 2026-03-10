@@ -27,7 +27,11 @@ import { useUpload } from "@/hooks/useUpload";
 import { useProcessingJob } from "@/hooks/useProcessingJob";
 import { FileDropzone } from "@/components/uploads/FileDropzone";
 import { SheetMusicViewer } from "@/components/sheet-music/SheetMusicViewer";
-import { AudioPlayer } from "@/components/audio/AudioPlayer";
+import dynamic from "next/dynamic";
+const AudioPlayer = dynamic(
+  () => import("@/components/audio/AudioPlayer").then((m) => m.AudioPlayer),
+  { ssr: false }
+);
 import { useQueryClient } from "@tanstack/react-query";
 
 interface Part {
