@@ -6,11 +6,11 @@ const FROM = process.env.EMAIL_FROM || "RehearSync <noreply@send.rehearsync.com>
 const APP_URL = process.env.NEXTAUTH_URL || "http://localhost:3000";
 
 const LOGO_HEADER = `
-  <img src="${APP_URL}/logo_light.png" alt="RehearSync" width="160" style="display: block; margin-bottom: 24px;" />
+  <img src="${APP_URL}/logo.png" alt="RehearSync" width="160" style="display: block; margin-bottom: 24px;" />
 `;
 
 const EMAIL_FOOTER = `
-  <div style="border-top: 1px solid #e2e8f0; margin-top: 32px; padding-top: 20px; font-size: 12px; color: #a0aec0; line-height: 1.6;">
+  <div style="border-top: 1px solid #e2e8f0; margin-top: 32px; padding-top: 20px; font-size: 12px; color: #a0aec0; line-height: 1.6; text-align: center;">
     <a href="${APP_URL}" style="color: #a0aec0; text-decoration: none; font-weight: 600;">RehearSync</a> &middot; Rehearsal management for bands
     <br />
     You're receiving this email because of your RehearSync account.
