@@ -123,6 +123,8 @@ model Song {
   title             String
   artist            String?
   notes             String?
+  songKey           String?  @map("song_key")
+  timeSignature     String?  @map("time_signature")
   defaultBpm        Decimal? @map("default_bpm") @db.Decimal
   createdByMemberId String?  @map("created_by_member_id")
   createdAt         DateTime @default(now()) @map("created_at")

@@ -13,6 +13,8 @@ export async function createSong(
       title: data.title,
       artist: data.artist,
       notes: data.notes,
+      songKey: data.songKey,
+      timeSignature: data.timeSignature,
       defaultBpm: data.defaultBpm,
       createdByMemberId: memberId,
     },

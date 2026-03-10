@@ -31,6 +31,8 @@ interface SongSummary {
   id: string;
   title: string;
   artist: string | null;
+  songKey: string | null;
+  timeSignature: string | null;
   _count: { arrangements: number };
 }
 
@@ -321,6 +323,16 @@ export default function DashboardPage() {
                         <Text fontSize="xs" color="gray.400">
                           {song.artist}
                         </Text>
+                      )}
+                      {song.songKey && (
+                        <Badge colorPalette="purple" variant="subtle" fontSize="xs">
+                          {song.songKey}
+                        </Badge>
+                      )}
+                      {song.timeSignature && (
+                        <Badge colorPalette="orange" variant="subtle" fontSize="xs">
+                          {song.timeSignature}
+                        </Badge>
                       )}
                       <Badge colorPalette="gray" variant="subtle" fontSize="xs">
                         {song._count.arrangements} arr.

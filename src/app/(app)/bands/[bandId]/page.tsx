@@ -23,6 +23,8 @@ interface Song {
   id: string;
   title: string;
   artist: string | null;
+  songKey: string | null;
+  timeSignature: string | null;
   defaultBpm: number | null;
   _count: { arrangements: number };
 }
@@ -40,8 +42,10 @@ export default function BandSongsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [title, setTitle] = useState("");
   const [artist, setArtist] = useState("");
+  const [songKey, setSongKey] = useState("");
+  const [timeSignature, setTimeSignature] = useState("");
 
-  const createSong = useApiMutation<Song, { title: string; artist?: string }>(
+  const createSong = useApiMutation<Song, { title: string; artist?: string; songKey?: string; timeSignature?: string }>(
     `/bands/${bandId}/songs`,
     "POST",
     {
@@ -50,6 +54,8 @@ export default function BandSongsPage() {
         setShowCreate(false);
         setTitle("");
         setArtist("");
+        setSongKey("");
+        setTimeSignature("");
         router.push(`/bands/${bandId}/songs/${song.id}`);
       },
     }
@@ -126,6 +132,16 @@ export default function BandSongsPage() {
                     </Box>
                   </Flex>
                   <Flex gap={2} align="center">
+                    {song.songKey && (
+                      <Badge colorPalette="purple" variant="subtle">
+                        {song.songKey}
+                      </Badge>
+                    )}
+                    {song.timeSignature && (
+                      <Badge colorPalette="orange" variant="subtle">
+                        {song.timeSignature}
+                      </Badge>
+                    )}
                     {song.defaultBpm && (
                       <Badge colorPalette="gray" variant="subtle">
                         {song.defaultBpm} BPM
@@ -164,6 +180,8 @@ export default function BandSongsPage() {
                   createSong.mutate({
                     title,
                     ...(artist ? { artist } : {}),
+                    ...(songKey ? { songKey } : {}),
+                    ...(timeSignature ? { timeSignature } : {}),
                   });
                 }}
               >
@@ -187,6 +205,24 @@ export default function BandSongsPage() {
                       placeholder="e.g. Queen"
                     />
                   </Field.Root>
+                  <Flex gap={4}>
+                    <Field.Root flex={1}>
+                      <Field.Label>Key (optional)</Field.Label>
+                      <Input
+                        value={songKey}
+                        onChange={(e) => setSongKey(e.target.value)}
+                        placeholder="e.g. Am, C, F#m"
+                      />
+                    </Field.Root>
+                    <Field.Root flex={1}>
+                      <Field.Label>Time Sig. (optional)</Field.Label>
+                      <Input
+                        value={timeSignature}
+                        onChange={(e) => setTimeSignature(e.target.value)}
+                        placeholder="e.g. 4/4, 3/4"
+                      />
+                    </Field.Root>
+                  </Flex>
                 </VStack>
               </form>
             </Dialog.Body>
