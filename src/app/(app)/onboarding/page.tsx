@@ -80,6 +80,7 @@ function OnboardingWizard() {
     bandId: string;
     invites: { name: string; email?: string; joinUrl: string }[];
   } | null>(null);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
   // Pre-fill from existing band
   useEffect(() => {
@@ -635,12 +636,19 @@ function OnboardingWizard() {
                     ) : (
                       <Button
                         size="xs"
-                        variant="outline"
+                        variant={copiedIndex === i ? "solid" : "outline"}
+                        colorPalette={copiedIndex === i ? "green" : "gray"}
                         onClick={async () => {
                           await navigator.clipboard.writeText(inv.joinUrl);
+                          setCopiedIndex(i);
+                          setTimeout(() => setCopiedIndex(null), 2000);
                         }}
                       >
-                        Copy Link
+                        {copiedIndex === i ? (
+                          <><Check size={14} /> Copied!</>
+                        ) : (
+                          "Copy Link"
+                        )}
                       </Button>
                     )}
                   </Flex>
