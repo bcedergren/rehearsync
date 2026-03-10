@@ -83,6 +83,15 @@ export default function DashboardPage() {
     }
   );
 
+  const singleBand = bands && bands.length === 1 ? bands[0] : null;
+
+  // Fetch songs for single-band view (must be before any early return)
+  const { data: songs } = useApiQuery<SongSummary[]>(
+    ["songs", singleBand?.id ?? ""],
+    `/bands/${singleBand?.id}/songs`,
+    { enabled: !!singleBand }
+  );
+
   if (isLoading) {
     return (
       <Flex justify="center" align="center" minH="60vh">
@@ -91,14 +100,7 @@ export default function DashboardPage() {
     );
   }
 
-  const band = bands && bands.length === 1 ? bands[0] : null;
-
-  // Fetch songs for single-band view
-  const { data: songs } = useApiQuery<SongSummary[]>(
-    ["songs", band?.id ?? ""],
-    `/bands/${band?.id}/songs`,
-    { enabled: !!band }
-  );
+  const band = singleBand;
   const showSingleBandView = band && !canCreateBand;
 
   return (
