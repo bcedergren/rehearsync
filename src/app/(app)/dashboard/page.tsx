@@ -207,15 +207,6 @@ export default function DashboardPage() {
                 >
                   👥 Manage Members
                 </Button>
-                {tier !== "free" && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => router.push(`/bands/${band.id}/sessions`)}
-                  >
-                    🎧 Sessions
-                  </Button>
-                )}
               </Flex>
             </Card.Body>
           </Card.Root>
