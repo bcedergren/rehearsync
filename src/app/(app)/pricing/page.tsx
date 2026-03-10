@@ -11,7 +11,7 @@ import {
   Card,
   SimpleGrid,
 } from "@chakra-ui/react";
-import { useState, useEffect, useRef } from "react";
+import { Suspense, useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { useApiQuery } from "@/hooks/useApi";
 
@@ -72,6 +72,14 @@ const PLANS = [
 ];
 
 export default function PricingPage() {
+  return (
+    <Suspense>
+      <PricingContent />
+    </Suspense>
+  );
+}
+
+function PricingContent() {
   const searchParams = useSearchParams();
   const urlPlan = searchParams.get("plan") as "band" | "agent" | null;
   const urlInterval = searchParams.get("interval") as "monthly" | "yearly" | null;
