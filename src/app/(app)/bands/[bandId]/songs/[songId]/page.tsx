@@ -15,8 +15,9 @@ import {
   CloseButton,
   Spinner,
 } from "@chakra-ui/react";
+import { Pencil } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useApiQuery, useApiMutation } from "@/hooks/useApi";
 
 interface Arrangement {
@@ -45,6 +46,24 @@ export default function SongDetailPage() {
     `/songs/${songId}`
   );
 
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
+  const titleInputRef = useRef<HTMLInputElement>(null);
+
+  const updateSong = useApiMutation<Song, { title: string }>(
+    `/songs/${songId}`,
+    "PATCH",
+    { invalidateKeys: [["song", songId]] }
+  );
+
+  const saveTitle = () => {
+    const trimmed = titleDraft.trim();
+    if (trimmed && trimmed !== song?.title) {
+      updateSong.mutate({ title: trimmed });
+    }
+    setEditingTitle(false);
+  };
+
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState("");
   const [versionLabel, setVersionLabel] = useState("v1");
@@ -72,9 +91,44 @@ export default function SongDetailPage() {
 
   return (
     <Box>
-      <Heading size="lg" mb={1}>
-        {song.title}
-      </Heading>
+      {editingTitle ? (
+        <Input
+          ref={titleInputRef}
+          value={titleDraft}
+          onChange={(e) => setTitleDraft(e.target.value)}
+          onBlur={saveTitle}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") saveTitle();
+            if (e.key === "Escape") setEditingTitle(false);
+          }}
+          fontSize="xl"
+          fontWeight="bold"
+          variant="flushed"
+          mb={1}
+          autoFocus
+        />
+      ) : (
+        <Flex
+          align="center"
+          gap={2}
+          mb={1}
+          className="group"
+          cursor="pointer"
+          onClick={() => {
+            setTitleDraft(song.title);
+            setEditingTitle(true);
+          }}
+        >
+          <Heading size="lg">{song.title}</Heading>
+          <Box
+            opacity={0}
+            transition="opacity 0.15s"
+            sx={{ ".group:hover &": { opacity: 1 } }}
+          >
+            <Pencil size={16} color="var(--chakra-colors-gray-400)" />
+          </Box>
+        </Flex>
+      )}
       {song.artist && (
         <Text color="gray.500" mb={6}>
           {song.artist}

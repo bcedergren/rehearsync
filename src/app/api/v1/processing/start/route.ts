@@ -94,6 +94,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
     return response.created({ jobId: job.id, status: "running" });
   } catch (err) {
+    console.error("[processing/start] Failed to create prediction:", err);
     const message =
       err instanceof Error ? err.message : "Failed to start processing";
     await processingService.updateJobStatus(job.id, "failed", {

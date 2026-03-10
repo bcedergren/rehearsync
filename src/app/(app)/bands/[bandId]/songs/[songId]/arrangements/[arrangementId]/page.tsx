@@ -28,6 +28,7 @@ import { useProcessingJob } from "@/hooks/useProcessingJob";
 import { FileDropzone } from "@/components/uploads/FileDropzone";
 import { AssignmentReviewModal } from "@/components/assignments/AssignmentReviewModal";
 import { SyncMapEditorModal } from "@/components/sync-map/SyncMapEditorModal";
+import { Pencil } from "lucide-react";
 import dynamic from "next/dynamic";
 const SheetMusicViewer = dynamic(
   () => import("@/components/sheet-music/SheetMusicViewer").then((m) => m.SheetMusicViewer),
@@ -164,6 +165,50 @@ export default function ArrangementDetailPage() {
     ["members", bandId],
     `/bands/${bandId}/members`
   );
+
+  // Inline editing for song title and arrangement name
+  const [editingSongTitle, setEditingSongTitle] = useState(false);
+  const [editingArrName, setEditingArrName] = useState(false);
+  const [songTitleDraft, setSongTitleDraft] = useState("");
+  const [arrNameDraft, setArrNameDraft] = useState("");
+
+  const updateSongMutation = useApiMutation(
+    `/songs/${songId}`,
+    "PATCH",
+    { invalidateKeys: [["arrangement", arrangementId]] }
+  );
+
+  const updateArrMutation = useApiMutation(
+    `/arrangements/${arrangementId}`,
+    "PATCH",
+    { invalidateKeys: [["arrangement", arrangementId]] }
+  );
+
+  function startEditSongTitle() {
+    setSongTitleDraft(arrangement?.song.title ?? "");
+    setEditingSongTitle(true);
+  }
+
+  function saveSongTitle() {
+    const trimmed = songTitleDraft.trim();
+    if (trimmed && trimmed !== arrangement?.song.title) {
+      updateSongMutation.mutate({ title: trimmed });
+    }
+    setEditingSongTitle(false);
+  }
+
+  function startEditArrName() {
+    setArrNameDraft(arrangement?.name ?? "");
+    setEditingArrName(true);
+  }
+
+  function saveArrName() {
+    const trimmed = arrNameDraft.trim();
+    if (trimmed && trimmed !== arrangement?.name) {
+      updateArrMutation.mutate({ name: trimmed });
+    }
+    setEditingArrName(false);
+  }
 
   const publishMutation = useApiMutation(
     `/arrangements/${arrangementId}/publish`,
@@ -1271,10 +1316,58 @@ export default function ArrangementDetailPage() {
 
         <Flex justify="space-between" align="center" mb={4}>
           <Box>
+            {/* Song title — click to edit */}
+            {editingSongTitle ? (
+              <Input
+                size="sm"
+                value={songTitleDraft}
+                onChange={(e) => setSongTitleDraft(e.target.value)}
+                onBlur={saveSongTitle}
+                onKeyDown={(e) => { if (e.key === "Enter") saveSongTitle(); if (e.key === "Escape") setEditingSongTitle(false); }}
+                autoFocus
+                mb={1}
+                maxW="400px"
+                fontWeight="medium"
+                color="gray.500"
+              />
+            ) : (
+              <Text
+                fontSize="sm"
+                color="gray.500"
+                mb={1}
+                cursor="pointer"
+                _hover={{ color: "blue.500" }}
+                onClick={startEditSongTitle}
+                title="Click to edit song name"
+              >
+                {arrangement.song.title}
+              </Text>
+            )}
+            {/* Arrangement name — click to edit */}
             <Flex align="center" gap={3}>
-              <Heading size="xl" color="gray.800">
-                {arrangement.name}
-              </Heading>
+              {editingArrName ? (
+                <Input
+                  size="lg"
+                  value={arrNameDraft}
+                  onChange={(e) => setArrNameDraft(e.target.value)}
+                  onBlur={saveArrName}
+                  onKeyDown={(e) => { if (e.key === "Enter") saveArrName(); if (e.key === "Escape") setEditingArrName(false); }}
+                  autoFocus
+                  maxW="400px"
+                  fontWeight="bold"
+                />
+              ) : (
+                <Heading
+                  size="xl"
+                  color="gray.800"
+                  cursor="pointer"
+                  _hover={{ color: "blue.600" }}
+                  onClick={startEditArrName}
+                  title="Click to edit arrangement name"
+                >
+                  {arrangement.name}
+                </Heading>
+              )}
               <Text color="gray.400" fontWeight="normal" fontSize="lg">
                 {arrangement.versionLabel}
               </Text>
@@ -1370,7 +1463,21 @@ export default function ArrangementDetailPage() {
                   cursor="pointer"
                   onClick={() => handleStepAction(step.action)}
                   position="relative"
+                  className="group"
                 >
+                  {/* Edit icon — visible on hover */}
+                  <Box
+                    position="absolute"
+                    top={2}
+                    right={2}
+                    opacity={0}
+                    transition="opacity 0.15s"
+                    color="gray.400"
+                    sx={{ ".group:hover &": { opacity: 1 } }}
+                  >
+                    <Pencil size={14} />
+                  </Box>
+
                   {/* Step check + label */}
                   <Flex align="center" gap={2} mb={1}>
                     <Flex
@@ -1399,30 +1506,27 @@ export default function ArrangementDetailPage() {
 
                   {/* Action hint */}
                   {isNext && !done && (
-                    <Text fontSize="xs" fontWeight="semibold" color="blue.600" mt={2}>
+                    <Text fontSize="xs" fontWeight="semibold" color="blue.600" mt={1}>
                       Next step →
                     </Text>
                   )}
-
-                  {/* Action button */}
-                  <Button
-                    size="xs"
-                    variant={done ? "outline" : "solid"}
-                    colorPalette={done ? "gray" : "blue"}
-                    mt={2}
-                    w="full"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleStepAction(step.action);
-                    }}
-                  >
-                    {done ? "Edit" : step.actionLabel}
-                  </Button>
                 </Box>
               );
             })}
           </SimpleGrid>
 
+          {/* Processing status toasts */}
+          <VStack gap={2} align="stretch">
+            {renderProcessingStatus(isStemProcessing, stemProcessingError, "Separating stems...", "Usually takes 1-3 minutes.", "Stem separation failed", fullMix ? () => startStemSeparation(fullMix.id, "stem_separation") : undefined, stemProgress, stemProgressLabel)}
+            {renderProcessingStatus(isTranscribing || isRegenerating, transcriptionError, "Transcribing audio to sheet music...", "May take 2-5 minutes.", "Transcription failed", undefined, transcriptionProgress, transcriptionProgressLabel)}
+            {renderProcessingStatus(isBeatProcessing, beatProcessingError, "Generating sync map...", "Usually under a minute.", "Beat detection failed", fullMix ? () => startBeatDetection(fullMix.id, "beat_detection") : undefined, beatProgress, beatProgressLabel)}
+            {isGeneratingSections && (
+              <Flex align="center" gap={3} p={3} borderRadius="md" bg="blue.50" border="1px solid" borderColor="blue.100">
+                <Spinner size="sm" color="blue.500" />
+                <Text fontSize="xs" color="blue.700" fontWeight="medium">Analyzing song structure...</Text>
+              </Flex>
+            )}
+          </VStack>
         </Box>
       )}
 
@@ -1659,59 +1763,114 @@ export default function ArrangementDetailPage() {
         </Flex>
       )}
 
-      {/* Upload Sheet Music Modal */}
+      {/* Charts Modal */}
       <Dialog.Root open={showUploadSheet} onOpenChange={(e) => setShowUploadSheet(e.open)}>
         <Dialog.Backdrop />
         <Dialog.Positioner>
           <Dialog.Content maxW="500px">
             <Dialog.Header>
-              <Dialog.Title>Upload Sheet Music</Dialog.Title>
+              <Dialog.Title>Charts</Dialog.Title>
               <Dialog.CloseTrigger asChild>
                 <CloseButton size="sm" />
               </Dialog.CloseTrigger>
             </Dialog.Header>
             <Dialog.Body>
-              <form id="upload-sheet-form" onSubmit={handleSheetSubmit}>
-                <VStack gap={4} align="stretch">
-                  <FileDropzone
-                    accept={[".musicxml", ".xml", ".mxl", ".pdf"]}
-                    onFile={setSheetFile}
-                    label="Drop MusicXML or PDF"
-                  />
-                  <Field.Root>
-                    <Field.Label>Part</Field.Label>
-                    <NativeSelect.Root>
-                      <NativeSelect.Field
-                        value={sheetPartId}
-                        onChange={(e) => setSheetPartId(e.target.value)}
+              <VStack gap={4} align="stretch">
+                {/* Existing charts */}
+                {hasCharts && (
+                  <Box>
+                    <Text fontSize="xs" fontWeight="semibold" color="gray.500" textTransform="uppercase" mb={2}>
+                      Current Charts
+                    </Text>
+                    <VStack gap={2} align="stretch">
+                      {arrangement.parts.filter((p) => p.sheetMusicAssets.length > 0).map((part) => (
+                        <Flex key={part.id} align="center" justify="space-between" p={2} bg="green.50" borderRadius="md" border="1px solid" borderColor="green.100">
+                          <Flex align="center" gap={2}>
+                            <Badge colorPalette="green" variant="subtle" fontSize="xs">
+                              {part.sheetMusicAssets[0].fileType.toUpperCase()}
+                            </Badge>
+                            <Text fontSize="sm" fontWeight="medium">{part.instrumentName}</Text>
+                          </Flex>
+                          <Button
+                            size="xs"
+                            variant="ghost"
+                            colorPalette="blue"
+                            onClick={() => {
+                              setPreviewAsset({
+                                objectKey: part.sheetMusicAssets[0].storageObject.objectKey,
+                                fileType: part.sheetMusicAssets[0].fileType,
+                                fileName: part.sheetMusicAssets[0].storageObject.originalFileName,
+                              });
+                            }}
+                          >
+                            Preview
+                          </Button>
+                        </Flex>
+                      ))}
+                    </VStack>
+                    {stemsWithCharts.length > 0 && !isTranscribing && !isRegenerating && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        mt={3}
+                        w="full"
+                        onClick={() => { setShowUploadSheet(false); handleRegenerateCharts(); }}
+                        loading={isRegenerating}
                       >
-                        <option value="">Select a part...</option>
-                        {parts?.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.instrumentName}
-                            {p.partName ? ` — ${p.partName}` : ""}
-                          </option>
-                        ))}
-                      </NativeSelect.Field>
-                    </NativeSelect.Root>
-                  </Field.Root>
-                  {isUploadingSheet && (
-                    <Text fontSize="sm" color="blue.500">
-                      Uploading... {sheetProgress}%
-                    </Text>
-                  )}
-                  {sheetUploadError && (
-                    <Text fontSize="sm" color="red.500">
-                      {sheetUploadError}
-                    </Text>
-                  )}
-                </VStack>
-              </form>
+                        Regenerate All Charts
+                      </Button>
+                    )}
+                  </Box>
+                )}
+
+                {/* Upload new chart */}
+                <Box>
+                  <Text fontSize="xs" fontWeight="semibold" color="gray.500" textTransform="uppercase" mb={2}>
+                    Upload Chart
+                  </Text>
+                  <form id="upload-sheet-form" onSubmit={handleSheetSubmit}>
+                    <VStack gap={3} align="stretch">
+                      <FileDropzone
+                        accept={[".musicxml", ".xml", ".mxl", ".pdf"]}
+                        onFile={setSheetFile}
+                        label="Drop MusicXML or PDF"
+                      />
+                      <Field.Root>
+                        <Field.Label>Part</Field.Label>
+                        <NativeSelect.Root>
+                          <NativeSelect.Field
+                            value={sheetPartId}
+                            onChange={(e) => setSheetPartId(e.target.value)}
+                          >
+                            <option value="">Select a part...</option>
+                            {parts?.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.instrumentName}
+                                {p.partName ? ` — ${p.partName}` : ""}
+                              </option>
+                            ))}
+                          </NativeSelect.Field>
+                        </NativeSelect.Root>
+                      </Field.Root>
+                      {isUploadingSheet && (
+                        <Text fontSize="sm" color="blue.500">
+                          Uploading... {sheetProgress}%
+                        </Text>
+                      )}
+                      {sheetUploadError && (
+                        <Text fontSize="sm" color="red.500">
+                          {sheetUploadError}
+                        </Text>
+                      )}
+                    </VStack>
+                  </form>
+                </Box>
+              </VStack>
             </Dialog.Body>
             <Dialog.Footer>
               <Flex gap={3} w="full">
                 <Button variant="outline" flex={1} onClick={() => setShowUploadSheet(false)}>
-                  Cancel
+                  Close
                 </Button>
                 <Button
                   type="submit"

@@ -82,7 +82,7 @@ async function findJobByExternalId(externalId: string) {
       ),
       arrangements!arrangement_id (
         id, song_id,
-        songs!song_id ( band_id )
+        songs!song_id ( band_id, title )
       )
     `
     )
@@ -396,15 +396,58 @@ async function handleBeatDetection(
 
 // ─── MIDI → MusicXML Converter (deterministic, no LLM) ─────
 
-const NOTE_NAMES = ["C", "D", "D", "E", "E", "F", "G", "G", "A", "A", "B", "B"];
-const NOTE_ALTERS = [0, -1, 0, -1, 0, 0, -1, 0, -1, 0, -1, 0];
+const NOTE_NAMES = ["C", "C", "D", "D", "E", "F", "F", "G", "G", "A", "A", "B"];
+const NOTE_ALTERS = [0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0]; // sharps
+
+// Guitar standard tuning: string 1 (highest) = E4(64), string 6 (lowest) = E2(40)
+const GUITAR_TUNING = [64, 59, 55, 50, 45, 40]; // E4, B3, G3, D3, A2, E2
+// Bass standard tuning: string 1 (highest) = G2(43), string 4 (lowest) = E1(28)
+const BASS_TUNING = [43, 38, 33, 28]; // G2, D2, A1, E1
+
+// General MIDI drum map → display position on percussion staff
+// Maps MIDI note → { displayStep, displayOctave, noteheadType }
+const DRUM_MAP: Record<number, { step: string; octave: number; notehead: string; name: string }> = {
+  35: { step: "F", octave: 4, notehead: "normal", name: "Kick" },
+  36: { step: "F", octave: 4, notehead: "normal", name: "Kick" },
+  37: { step: "C", octave: 5, notehead: "x", name: "Side Stick" },
+  38: { step: "C", octave: 5, notehead: "normal", name: "Snare" },
+  40: { step: "C", octave: 5, notehead: "normal", name: "Snare" },
+  41: { step: "A", octave: 4, notehead: "normal", name: "Floor Tom Low" },
+  42: { step: "G", octave: 5, notehead: "x", name: "Hi-Hat Closed" },
+  43: { step: "A", octave: 4, notehead: "normal", name: "Floor Tom Hi" },
+  44: { step: "G", octave: 5, notehead: "x", name: "Hi-Hat Pedal" },
+  45: { step: "E", octave: 5, notehead: "normal", name: "Low Tom" },
+  46: { step: "G", octave: 5, notehead: "circle-x", name: "Hi-Hat Open" },
+  47: { step: "E", octave: 5, notehead: "normal", name: "Mid Tom Low" },
+  48: { step: "D", octave: 5, notehead: "normal", name: "Mid Tom Hi" },
+  49: { step: "A", octave: 5, notehead: "x", name: "Crash 1" },
+  50: { step: "D", octave: 5, notehead: "normal", name: "High Tom" },
+  51: { step: "B", octave: 5, notehead: "x", name: "Ride" },
+  52: { step: "B", octave: 5, notehead: "diamond", name: "China" },
+  53: { step: "B", octave: 5, notehead: "diamond", name: "Ride Bell" },
+  55: { step: "A", octave: 5, notehead: "x", name: "Splash" },
+  57: { step: "A", octave: 5, notehead: "x", name: "Crash 2" },
+  59: { step: "B", octave: 5, notehead: "x", name: "Ride 2" },
+};
+
+type NotationMode = "standard" | "tab" | "drums";
 
 interface MidiLike {
   header: { tempos: { bpm: number }[]; timeSignatures: { timeSignature: [number, number] }[] };
   tracks: { notes: { midi: number; time: number; duration: number; velocity: number }[] }[];
 }
 
-function midiToMusicXml(midi: MidiLike): string {
+function stemToNotationMode(stemName?: string | null): NotationMode {
+  if (!stemName) return "standard";
+  const s = stemName.toLowerCase();
+  if (s === "guitar" || s === "bass") return "tab";
+  if (s === "drums") return "drums";
+  return "standard";
+}
+
+function midiToMusicXml(midi: MidiLike, title?: string, stemName?: string | null): string {
+  const mode = stemToNotationMode(stemName);
+
   // Collect all notes across tracks
   const allNotes: { midi: number; time: number; duration: number; velocity: number }[] = [];
   for (const track of midi.tracks) {
@@ -413,7 +456,7 @@ function midiToMusicXml(midi: MidiLike): string {
     }
   }
   if (allNotes.length === 0) return "";
-  allNotes.sort((a, b) => a.time - b.time);
+  allNotes.sort((a, b) => a.time - b.time || a.midi - b.midi);
 
   // Get tempo and time signature from MIDI header
   const bpm = midi.header.tempos?.[0]?.bpm ?? 120;
@@ -421,50 +464,177 @@ function midiToMusicXml(midi: MidiLike): string {
   const beatsPerMeasure = timeSig[0];
   const beatUnit = timeSig[1];
 
-  // Divisions per quarter note (resolution for MusicXML durations)
-  const divisions = 24; // supports whole, half, quarter, eighth, sixteenth, triplets
+  // Divisions per quarter note
+  const divisions = 24;
   const secondsPerBeat = 60 / bpm;
   const secondsPerMeasure = secondsPerBeat * beatsPerMeasure * (4 / beatUnit);
+  const measureDivisions = divisions * beatsPerMeasure * (4 / beatUnit);
 
-  // Determine clef from pitch range
-  const avgPitch = allNotes.reduce((s, n) => s + n.midi, 0) / allNotes.length;
-  const clefSign = avgPitch < 60 ? "F" : "G";
-  const clefLine = avgPitch < 60 ? 4 : 2;
+  // Determine clef
+  let clefXml: string;
+  const isBass = stemName?.toLowerCase() === "bass";
+  const tuning = isBass ? BASS_TUNING : GUITAR_TUNING;
+  const numStrings = tuning.length;
+
+  if (mode === "tab") {
+    clefXml = `<clef><sign>TAB</sign><line>5</line></clef>
+        <staff-details>
+          <staff-lines>${numStrings}</staff-lines>`;
+    for (let s = 0; s < numStrings; s++) {
+      const pitch = tuning[s];
+      const oct = Math.floor(pitch / 12) - 1;
+      const pc = pitch % 12;
+      clefXml += `\n          <staff-tuning line="${numStrings - s}"><tuning-step>${NOTE_NAMES[pc]}</tuning-step>`;
+      if (NOTE_ALTERS[pc] !== 0) clefXml += `<tuning-alter>${NOTE_ALTERS[pc]}</tuning-alter>`;
+      clefXml += `<tuning-octave>${oct}</tuning-octave></staff-tuning>`;
+    }
+    clefXml += `\n        </staff-details>`;
+  } else if (mode === "drums") {
+    clefXml = `<clef><sign>percussion</sign></clef>`;
+  } else {
+    const avgPitch = allNotes.reduce((s, n) => s + n.midi, 0) / allNotes.length;
+    const sign = avgPitch < 60 ? "F" : "G";
+    const line = avgPitch < 60 ? 4 : 2;
+    clefXml = `<clef><sign>${sign}</sign><line>${line}</line></clef>`;
+  }
 
   // Total duration
   const lastNote = allNotes[allNotes.length - 1];
   const totalDuration = lastNote.time + lastNote.duration;
   const totalMeasures = Math.max(1, Math.ceil(totalDuration / secondsPerMeasure));
 
-  // Duration quantization table (in divisions): maps to standard note types
-  const durationTable: [number, string][] = [
-    [divisions * 4, "whole"],
-    [divisions * 3, "half"],       // dotted half
-    [divisions * 2, "half"],
-    [divisions * 1.5, "quarter"],  // dotted quarter
-    [divisions, "quarter"],
-    [divisions * 0.75, "eighth"],  // dotted eighth
-    [divisions / 2, "eighth"],
-    [divisions / 4, "16th"],
-  ];
+  // Map duration (in divisions) to a MusicXML note type
+  function durationToType(dur: number): { type: string; dot: boolean; actualDur: number } {
+    const types: [number, string][] = [
+      [divisions * 4, "whole"],
+      [divisions * 2, "half"],
+      [divisions, "quarter"],
+      [divisions / 2, "eighth"],
+      [divisions / 4, "16th"],
+      [divisions / 8, "32nd"],
+    ];
 
-  function quantizeDuration(durationDivs: number): { dur: number; type: string; dot: boolean } {
-    for (const [d, t] of durationTable) {
-      if (durationDivs >= d * 0.8) {
-        const isDotted = t === "half" && durationDivs >= divisions * 2.5
-          || t === "quarter" && durationDivs >= divisions * 1.25
-          || t === "eighth" && durationDivs >= divisions * 0.625;
-        const actualDur = isDotted ? Math.round(d * 1.5) : d;
-        return { dur: Math.round(actualDur), type: t, dot: !!isDotted };
+    for (const [d, t] of types) {
+      const dotted = d * 1.5;
+      if (dur >= dotted - 1 && dur <= dotted + 1) {
+        return { type: t, dot: true, actualDur: Math.round(dotted) };
       }
     }
-    return { dur: Math.round(divisions / 4), type: "16th", dot: false };
+
+    for (const [d, t] of types) {
+      if (dur >= d - 1 && dur <= d + 1) {
+        return { type: t, dot: false, actualDur: d };
+      }
+    }
+
+    let bestType = "quarter";
+    let bestDur = divisions;
+    let bestDiff = Math.abs(dur - divisions);
+    for (const [d, t] of types) {
+      const diff = Math.abs(dur - d);
+      if (diff < bestDiff) { bestDiff = diff; bestType = t; bestDur = d; }
+      const dottedDiff = Math.abs(dur - d * 1.5);
+      if (dottedDiff < bestDiff) { bestDiff = dottedDiff; bestType = t; bestDur = Math.round(d * 1.5); }
+    }
+    return { type: bestType, dot: false, actualDur: bestDur };
+  }
+
+  function splitDuration(totalDivs: number): { dur: number; type: string; dot: boolean }[] {
+    const parts: { dur: number; type: string; dot: boolean }[] = [];
+    let remaining = totalDivs;
+    const standardDurs = [
+      divisions * 6, divisions * 4, divisions * 3, divisions * 2,
+      divisions * 1.5, divisions, divisions * 0.75,
+      divisions / 2, divisions / 4, divisions / 8,
+    ];
+
+    while (remaining > 0) {
+      let found = false;
+      for (const d of standardDurs) {
+        if (remaining >= d - 1) {
+          const rounded = Math.round(d);
+          const { type, dot } = durationToType(rounded);
+          parts.push({ dur: rounded, type, dot });
+          remaining -= rounded;
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        if (parts.length > 0) parts[parts.length - 1].dur += Math.round(remaining);
+        break;
+      }
+    }
+    return parts;
   }
 
   function midiToPitch(m: number) {
     const octave = Math.floor(m / 12) - 1;
     const pc = m % 12;
     return { step: NOTE_NAMES[pc], alter: NOTE_ALTERS[pc], octave };
+  }
+
+  // Tab: find best string + fret for a MIDI note
+  function midiToTab(midiNote: number): { string: number; fret: number } {
+    let bestString = 1;
+    let bestFret = 0;
+    let bestScore = Infinity;
+    for (let s = 0; s < tuning.length; s++) {
+      const fret = midiNote - tuning[s];
+      if (fret >= 0 && fret <= 24) {
+        // Prefer lower frets on higher strings
+        const score = fret + s * 0.1;
+        if (score < bestScore) {
+          bestScore = score;
+          bestString = s + 1;
+          bestFret = fret;
+        }
+      }
+    }
+    // If note is out of range, place on lowest string
+    if (bestScore === Infinity) {
+      bestString = tuning.length;
+      bestFret = Math.max(0, midiNote - tuning[tuning.length - 1]);
+    }
+    return { string: bestString, fret: bestFret };
+  }
+
+  function restXml(dur: number): string {
+    const parts = splitDuration(dur);
+    let xml = "";
+    for (const p of parts) {
+      xml += `\n      <note><rest/><duration>${p.dur}</duration><type>${p.type}</type>`;
+      if (p.dot) xml += `<dot/>`;
+      xml += `</note>`;
+    }
+    return xml || `\n      <note><rest/><duration>${dur}</duration><type>quarter</type></note>`;
+  }
+
+  // Build note pitch/unpitched XML based on mode
+  function notePitchXml(midiNote: number): string {
+    if (mode === "drums") {
+      const dm = DRUM_MAP[midiNote] || { step: "C", octave: 5, notehead: "normal", name: "Perc" };
+      return `<unpitched><display-step>${dm.step}</display-step><display-octave>${dm.octave}</display-octave></unpitched>`;
+    }
+    const pitch = midiToPitch(midiNote);
+    let xml = `<pitch><step>${pitch.step}</step>`;
+    if (pitch.alter !== 0) xml += `<alter>${pitch.alter}</alter>`;
+    xml += `<octave>${pitch.octave}</octave></pitch>`;
+    return xml;
+  }
+
+  function noteNotationsXml(midiNote: number): string {
+    if (mode === "tab") {
+      const { string, fret } = midiToTab(midiNote);
+      return `<notations><technical><string>${string}</string><fret>${fret}</fret></technical></notations>`;
+    }
+    if (mode === "drums") {
+      const dm = DRUM_MAP[midiNote];
+      if (dm && dm.notehead !== "normal") {
+        return `<notehead>${dm.notehead}</notehead>`;
+      }
+    }
+    return "";
   }
 
   // Bucket notes into measures
@@ -474,72 +644,69 @@ function midiToMusicXml(midi: MidiLike): string {
     measures[measureIdx].push(note);
   }
 
+  const scoreTitle = title || "Transcription";
+  const partName = mode === "tab"
+    ? (isBass ? "Bass" : "Guitar")
+    : mode === "drums" ? "Drums" : "Music";
+
   // Build MusicXML
   let xml = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
 <score-partwise version="4.0">
+  <movement-title>${scoreTitle}</movement-title>
   <part-list>
-    <score-part id="P1"><part-name>Music</part-name></score-part>
+    <score-part id="P1"><part-name>${partName}</part-name></score-part>
   </part-list>
   <part id="P1">`;
 
   for (let m = 0; m < totalMeasures; m++) {
     xml += `\n    <measure number="${m + 1}">`;
 
-    // Attributes on first measure
     if (m === 0) {
       xml += `
       <attributes>
         <divisions>${divisions}</divisions>
         <time><beats>${beatsPerMeasure}</beats><beat-type>${beatUnit}</beat-type></time>
-        <clef><sign>${clefSign}</sign><line>${clefLine}</line></clef>
+        ${clefXml}
       </attributes>`;
-      if (m === 0) {
-        xml += `\n      <direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>${Math.round(bpm)}</per-minute></metronome></direction-type></direction>`;
-      }
+      xml += `\n      <direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>${Math.round(bpm)}</per-minute></metronome></direction-type></direction>`;
     }
 
     const measureStart = m * secondsPerMeasure;
-    const measureDivisions = divisions * beatsPerMeasure * (4 / beatUnit);
+    const measDiv = Math.round(measureDivisions);
     const notes = measures[m];
 
     if (notes.length === 0) {
-      // Full-measure rest
-      xml += `\n      <note><rest/><duration>${Math.round(measureDivisions)}</duration><type>whole</type></note>`;
+      xml += `\n      <note><rest measure="yes"/><duration>${measDiv}</duration><type>whole</type></note>`;
     } else {
-      let cursor = 0; // current position in divisions from measure start
+      let cursor = 0;
       for (let i = 0; i < notes.length; i++) {
         const note = notes[i];
-        const noteStartDiv = Math.round(((note.time - measureStart) / secondsPerBeat) * divisions);
+        const noteStartDiv = Math.max(0, Math.round(((note.time - measureStart) / secondsPerBeat) * divisions));
+        const isChord = i > 0 && Math.abs(notes[i].time - notes[i - 1].time) < 0.02;
 
-        // Insert rest if there's a gap
-        if (noteStartDiv > cursor + 1) {
-          const restDur = noteStartDiv - cursor;
-          xml += `\n      <note><rest/><duration>${restDur}</duration></note>`;
-          cursor = noteStartDiv;
-        } else if (noteStartDiv > cursor) {
-          cursor = noteStartDiv;
+        if (!isChord) {
+          const gap = noteStartDiv - cursor;
+          if (gap >= 2) {
+            xml += restXml(gap);
+            cursor = noteStartDiv;
+          } else if (gap > 0) {
+            cursor = noteStartDiv;
+          }
         }
 
-        const rawDurDiv = Math.round((note.duration / secondsPerBeat) * divisions);
-        // Clamp to remaining measure
-        const remainingInMeasure = Math.round(measureDivisions) - cursor;
-        const clampedDur = Math.min(rawDurDiv, remainingInMeasure);
-        const { dur, type, dot } = quantizeDuration(Math.max(1, clampedDur));
-        const finalDur = Math.min(dur, remainingInMeasure);
-
-        const pitch = midiToPitch(note.midi);
-
-        // Check if this is a chord (same start time as previous note)
-        const isChord = i > 0 && Math.abs(notes[i].time - notes[i - 1].time) < 0.02;
+        const rawDurDiv = Math.max(1, Math.round((note.duration / secondsPerBeat) * divisions));
+        const remainingInMeasure = measDiv - cursor;
+        const clampedDur = Math.min(rawDurDiv, Math.max(1, remainingInMeasure));
+        const { type, dot, actualDur } = durationToType(clampedDur);
+        const finalDur = Math.min(actualDur, remainingInMeasure);
 
         xml += `\n      <note>`;
         if (isChord) xml += `<chord/>`;
-        xml += `<pitch><step>${pitch.step}</step>`;
-        if (pitch.alter !== 0) xml += `<alter>${pitch.alter}</alter>`;
-        xml += `<octave>${pitch.octave}</octave></pitch>`;
+        xml += notePitchXml(note.midi);
         xml += `<duration>${finalDur}</duration><type>${type}</type>`;
         if (dot) xml += `<dot/>`;
+        xml += noteNotationsXml(note.midi);
         xml += `</note>`;
 
         if (!isChord) {
@@ -547,10 +714,9 @@ function midiToMusicXml(midi: MidiLike): string {
         }
       }
 
-      // Fill remaining measure with rest
-      const remaining = Math.round(measureDivisions) - cursor;
-      if (remaining > 1) {
-        xml += `\n      <note><rest/><duration>${remaining}</duration></note>`;
+      const remaining = measDiv - cursor;
+      if (remaining >= 2) {
+        xml += restXml(remaining);
       }
     }
 
@@ -611,6 +777,15 @@ async function handleTranscription(
     midiData.byteLength
   );
 
+  // Get the stem name early so we can select the right notation mode
+  const audioAssetId = job.audio_asset_id as string;
+  const { data: audioAsset } = await supabase
+    .from("audio_assets")
+    .select("stem_name")
+    .eq("id", audioAssetId)
+    .single();
+  const stemName = (audioAsset?.stem_name as string | null) ?? null;
+
   const result: Record<string, unknown> = {
     midiStorageObjectId,
     midiStorageKey: midiKey,
@@ -620,7 +795,9 @@ async function handleTranscription(
   let musicXmlContent = "";
   try {
     const midi = new Midi(new Uint8Array(midiData));
-    musicXmlContent = midiToMusicXml(midi);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const songTitle = (job as any).arrangements?.songs?.title as string | undefined;
+    musicXmlContent = midiToMusicXml(midi, songTitle, stemName);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     result.noteEventsCount = midi.tracks.reduce((sum: number, t: any) => sum + t.notes.length, 0);
   } catch (err) {
@@ -664,21 +841,14 @@ async function handleTranscription(
   result.musicXmlStorageObjectId = xmlStorageObjectId;
 
   // Find the Part linked to this stem's audio asset (if any)
-  const audioAssetId = job.audio_asset_id as string;
-  const { data: audioAsset } = await supabase
-    .from("audio_assets")
-    .select("stem_name")
-    .eq("id", audioAssetId)
-    .single();
-
   let partId: string | null = null;
 
-  if (audioAsset?.stem_name) {
+  if (stemName) {
     const { data: matchingPart } = await supabase
       .from("parts")
       .select("id")
       .eq("arrangement_id", arrangementId)
-      .ilike("instrument_name", `%${audioAsset.stem_name}%`)
+      .ilike("instrument_name", `%${stemName}%`)
       .limit(1)
       .single();
 
