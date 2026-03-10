@@ -176,7 +176,9 @@ describe("redeemBandInvite", () => {
     db.inviteLink.findUnique.mockResolvedValue(validLink);
     db.member.findFirst
       .mockResolvedValueOnce(null)  // not active member
+      .mockResolvedValueOnce({ id: "leader-1", user: { tier: "band" } }) // leader lookup
       .mockResolvedValueOnce(null); // not inactive member
+    db.member.count.mockResolvedValue(1); // current member count
     const newMember = { id: "m-2", bandId: "band-1", role: "musician" };
     db.member.create.mockResolvedValue(newMember);
     db.inviteLink.updateMany.mockResolvedValue({ count: 1 });
@@ -197,7 +199,9 @@ describe("redeemBandInvite", () => {
     db.inviteLink.findUnique.mockResolvedValue(validLink);
     db.member.findFirst
       .mockResolvedValueOnce(null)  // not active
+      .mockResolvedValueOnce({ id: "leader-1", user: { tier: "band" } }) // leader lookup
       .mockResolvedValueOnce({ id: "m-old", isActive: false }); // inactive exists
+    db.member.count.mockResolvedValue(1); // current member count
     db.member.update.mockResolvedValue({ id: "m-old", isActive: true });
     db.inviteLink.updateMany.mockResolvedValue({ count: 1 });
 

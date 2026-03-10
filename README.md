@@ -4,17 +4,19 @@ Rehearsal management platform for bands. Organize songs, arrangements, parts, an
 
 ## Features
 
-- **Band Management** — Create bands, invite members by email, assign roles
-- **Onboarding Wizard** — Post-signup setup flow: name your band, add members, assign instruments, send email invites
-- **Song & Arrangement Library** — Track songs with multiple arrangements, sections, and parts
+- **Band Management** — Create bands, invite members by email, assign roles (leader, admin, musician)
+- **Onboarding Wizard** — Setup flow for new and existing bands: name your band, add members, assign instruments, send email invites. Detects existing bands and switches to edit mode automatically
+- **Dashboard Hub** — Single-band view with stats, members with instruments, songs list with key/time signature badges, and quick access to the setup wizard
+- **Song & Arrangement Library** — Track songs with key, time signature, BPM, multiple arrangements, sections, and parts
 - **Sheet Music & Audio Assets** — Upload PDFs, MusicXML, and audio files with versioning
 - **AI Audio Processing** — Separate stems (Demucs), auto-detect beats (Essentia) for sync maps
 - **AI Section Analysis** — Automatically identify song sections (Intro, Verse, Chorus, etc.) from audio and sheet music using GPT-4o
-- **Audio Waveform Player** — Interactive waveform visualization (WaveSurfer.js) with color-coded tracks by role
+- **Audio Waveform Player** — Interactive waveform visualization (WaveSurfer.js) with track selector (full mix + individual stems), volume control, and playback position sync
+- **Auto-Assignment** — Automatically assigns band members to arrangement parts by matching their default instrument to stem-generated parts
 - **Score Sync Maps** — Map audio timestamps to bar numbers for synchronized playback
 - **Real-Time Rehearsal Sessions** — WebSocket-powered transport with synchronized state
 - **Email Notifications** — Welcome emails, password reset flow, and band invite emails via Resend
-- **Subscription Tiers** — Free, Band, and Agent tiers with Stripe billing
+- **Subscription Tiers** — Free, Band, and Agent tiers with Stripe billing and tier-based limits (bands, members, songs, features)
 
 ## Tech Stack
 
