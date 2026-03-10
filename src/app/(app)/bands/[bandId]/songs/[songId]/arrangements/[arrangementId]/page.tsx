@@ -141,6 +141,17 @@ export default function ArrangementDetailPage() {
     `/arrangements/${arrangementId}/readiness`
   );
 
+  // Band members (for auto-assigning parts)
+  interface BandMember {
+    id: string;
+    displayName: string;
+    defaultInstrument: string | null;
+  }
+  const { data: bandMembers } = useApiQuery<BandMember[]>(
+    ["members", bandId],
+    `/bands/${bandId}/members`
+  );
+
   const publishMutation = useApiMutation(
     `/arrangements/${arrangementId}/publish`,
     "POST",
@@ -328,7 +339,7 @@ export default function ArrangementDetailPage() {
     Record<string, { checked: boolean; instrumentName: string }>
   >({});
 
-  const createPartMutation = useApiMutation(
+  const createPartMutation = useApiMutation<{ id: string; instrumentName: string }, { instrumentName: string; isRequired: boolean }>(
     `/arrangements/${arrangementId}/parts`,
     "POST",
     {
@@ -340,16 +351,57 @@ export default function ArrangementDetailPage() {
     }
   );
 
+  const assignMutation = useApiMutation(
+    `/arrangements/${arrangementId}/assignments`,
+    "POST",
+    {
+      invalidateKeys: [
+        ["arrangement", arrangementId],
+        ["readiness", arrangementId],
+      ],
+    }
+  );
+
   async function handleCreatePartsFromStems() {
     const entries = Object.entries(stemMappings).filter(
       ([, v]) => v.checked && v.instrumentName.trim()
     );
+
+    // Create parts and collect their IDs
+    const createdParts: { id: string; instrumentName: string }[] = [];
     for (const [, mapping] of entries) {
-      createPartMutation.mutate({
-        instrumentName: mapping.instrumentName,
-        isRequired: true,
-      });
+      try {
+        const part = await createPartMutation.mutateAsync({
+          instrumentName: mapping.instrumentName,
+          isRequired: true,
+        });
+        createdParts.push(part);
+      } catch {
+        // continue creating remaining parts
+      }
     }
+
+    // Auto-assign members whose defaultInstrument matches a created part
+    if (bandMembers && createdParts.length > 0) {
+      for (const member of bandMembers) {
+        if (!member.defaultInstrument) continue;
+        const matchingPart = createdParts.find(
+          (p) => p.instrumentName.toLowerCase() === member.defaultInstrument!.toLowerCase()
+        );
+        if (matchingPart) {
+          try {
+            await assignMutation.mutateAsync({
+              memberId: member.id,
+              partId: matchingPart.id,
+              isDefault: true,
+            });
+          } catch {
+            // continue assigning remaining members
+          }
+        }
+      }
+    }
+
     setStemMappings({});
   }
 
@@ -1067,13 +1119,41 @@ export default function ArrangementDetailPage() {
                 </Button>
               </Flex>
               {arrangement.sectionMarkers.length === 0 ? (
-                <Flex direction="column" align="center" justify="center" p={6} bg="gray.50" borderRadius="lg" textAlign="center">
-                  <Text fontSize="sm" color="gray.500" mb={3}>
-                    No sections defined yet
-                  </Text>
-                  <Button size="sm" colorPalette="blue" variant="outline" onClick={() => router.push(`${basePath}/sections`)}>
-                    Add Sections
-                  </Button>
+                <Flex direction="column" align="center" justify="center" p={6} bg="gray.50" borderRadius="lg" textAlign="center" gap={3}>
+                  {isGeneratingSections ? (
+                    <>
+                      <Spinner size="sm" color="blue.500" />
+                      <Text fontSize="sm" color="blue.500">Analyzing song structure...</Text>
+                    </>
+                  ) : sectionGenError ? (
+                    <>
+                      <Text fontSize="sm" color="red.500">{sectionGenError}</Text>
+                      <Flex gap={2}>
+                        <Button size="sm" colorPalette="purple" variant="outline" onClick={handleGenerateSections}>
+                          Retry
+                        </Button>
+                        <Button size="sm" colorPalette="blue" variant="outline" onClick={() => router.push(`${basePath}/sections`)}>
+                          Add Manually
+                        </Button>
+                      </Flex>
+                    </>
+                  ) : (
+                    <>
+                      <Text fontSize="sm" color="gray.500">
+                        No sections defined yet
+                      </Text>
+                      <Flex gap={2}>
+                        {hasAudio && (
+                          <Button size="sm" colorPalette="purple" onClick={handleGenerateSections}>
+                            {renderAiChip("")} Auto-Generate
+                          </Button>
+                        )}
+                        <Button size="sm" colorPalette="blue" variant="outline" onClick={() => router.push(`${basePath}/sections`)}>
+                          Add Manually
+                        </Button>
+                      </Flex>
+                    </>
+                  )}
                 </Flex>
               ) : (
                 <Flex gap={2} flexWrap="wrap">

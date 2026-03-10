@@ -268,21 +268,41 @@ export function AudioPlayer({
       <audio ref={audioRef} preload="metadata" />
 
       {/* Track selector */}
-      {tracks.length > 1 && (
-        <Flex gap={2} mb={3} flexWrap="wrap">
-          {tracks.map((track) => (
-            <Button
-              key={track.id}
-              size="xs"
-              variant={track.id === activeTrack?.id ? "solid" : "outline"}
-              colorPalette={ROLE_COLORS[track.role] || "gray"}
-              onClick={() => switchTrack(track.id)}
-            >
-              {track.label}
-            </Button>
-          ))}
-        </Flex>
-      )}
+      {tracks.length > 1 && (() => {
+        const fullMix = tracks.find((t) => t.role === "full_mix");
+        const otherTracks = tracks.filter((t) => t.role !== "full_mix");
+        return (
+          <Flex direction="column" gap={2} mb={3}>
+            {fullMix && (
+              <Button
+                size="xs"
+                w="full"
+                variant={fullMix.id === activeTrack?.id ? "solid" : "outline"}
+                colorPalette={ROLE_COLORS[fullMix.role] || "gray"}
+                onClick={() => switchTrack(fullMix.id)}
+              >
+                {fullMix.label}
+              </Button>
+            )}
+            {otherTracks.length > 0 && (
+              <Flex gap={2} flexWrap="wrap">
+                {otherTracks.map((track) => (
+                  <Button
+                    key={track.id}
+                    size="xs"
+                    flex="1 1 0"
+                    variant={track.id === activeTrack?.id ? "solid" : "outline"}
+                    colorPalette={ROLE_COLORS[track.role] || "gray"}
+                    onClick={() => switchTrack(track.id)}
+                  >
+                    {track.label}
+                  </Button>
+                ))}
+              </Flex>
+            )}
+          </Flex>
+        );
+      })()}
 
       {/* Waveform */}
       <Box
