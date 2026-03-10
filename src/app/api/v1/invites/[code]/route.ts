@@ -37,12 +37,17 @@ export const POST = withAuth(async (req: NextRequest, ctx, params) => {
   const link = await inviteService.resolveInviteLink(code);
 
   if (link.type === "band_invite") {
-    const name = ctx.email.split("@")[0]; // fallback display name
+    const body = await req.json().catch(() => ({}));
+    const user = await prisma.user.findUnique({
+      where: { id: ctx.userId },
+      select: { name: true },
+    });
+    const displayName = body.displayName || user?.name || ctx.email.split("@")[0];
     const result = await inviteService.redeemBandInvite(
       code,
       ctx.userId,
       ctx.email,
-      name
+      displayName
     );
     return response.ok({
       bandId: result.bandId,

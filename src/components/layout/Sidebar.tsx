@@ -4,7 +4,7 @@ import { Box, VStack, Text, Link as ChakraLink, Flex } from "@chakra-ui/react";
 import Image from "next/image";
 import NextLink from "next/link";
 import { useParams, usePathname } from "next/navigation";
-import { Home, Music, Users, CreditCard } from "lucide-react";
+import { Home, Music, Users } from "lucide-react";
 
 interface NavItem {
   label: string;
@@ -33,7 +33,6 @@ export function Sidebar() {
           },
         ]
       : []),
-    { label: "Pricing", href: "/pricing", icon: <CreditCard size={18} /> },
   ];
 
   return (
@@ -57,7 +56,6 @@ export function Sidebar() {
           const isActive =
             pathname === item.href ||
             (item.href !== "/dashboard" &&
-              item.href !== "/pricing" &&
               pathname.startsWith(item.href + "/"));
           return (
             <ChakraLink

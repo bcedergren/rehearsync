@@ -4,8 +4,10 @@ import {
   Box,
   Button,
   Card,
+  Field,
   Flex,
   Heading,
+  Input,
   Spinner,
   Text,
 } from "@chakra-ui/react";
@@ -28,11 +30,16 @@ export default function JoinPage() {
 
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState("");
+  const [displayName, setDisplayName] = useState("");
 
+  const { data: me } = useApiQuery<{ user: { name: string | null } }>(["me"], "/me");
   const { data: invite, isLoading, error: fetchError } = useApiQuery<InvitePreview>(
     ["invite", code],
     `/invites/${code}`
   );
+
+  // Pre-fill display name from user profile
+  const effectiveName = displayName || me?.user?.name || "";
 
   async function handleJoin() {
     setJoining(true);
@@ -41,7 +48,7 @@ export default function JoinPage() {
     try {
       const result = await apiFetch<{ bandId: string; sessionId?: string; alreadyMember?: boolean }>(
         `/invites/${code}`,
-        { method: "POST", body: JSON.stringify({}) }
+        { method: "POST", body: JSON.stringify({ displayName: effectiveName }) }
       );
 
       if (result.sessionId) {
@@ -138,6 +145,17 @@ export default function JoinPage() {
             <Text color="gray.500" mb={6}>
               Join this band to access songs, arrangements, and rehearsals.
             </Text>
+            <Box mb={5} textAlign="left">
+              <Field.Root>
+                <Field.Label fontSize="sm" color="gray.600">Display Name</Field.Label>
+                <Input
+                  value={displayName || me?.user?.name || ""}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="How you'll appear in the band"
+                  size="lg"
+                />
+              </Field.Root>
+            </Box>
             {error && (
               <Box mb={4} p={3} bg="red.50" borderRadius="md" border="1px solid" borderColor="red.200">
                 <Text color="red.600" fontSize="sm">{error}</Text>
