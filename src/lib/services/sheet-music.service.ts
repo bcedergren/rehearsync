@@ -50,7 +50,7 @@ export async function listSheetMusicAssets(arrangementId: string) {
     include: {
       part: { select: { id: true, instrumentName: true, partName: true } },
       storageObject: {
-        select: { originalFileName: true, mimeType: true, sizeBytes: true },
+        select: { objectKey: true, originalFileName: true, mimeType: true, sizeBytes: true },
       },
     },
   });

@@ -18,6 +18,16 @@ import { useApiQuery, useApiMutation, apiFetch } from "@/hooks/useApi";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useSessionStore } from "@/stores/session.store";
 import { AudioPlayer } from "@/components/audio/AudioPlayer";
+import { SheetMusicViewer } from "@/components/sheet-music/SheetMusicViewer";
+
+interface SheetMusicAsset {
+  id: string;
+  fileType: "pdf" | "musicxml";
+  status: string;
+  isActive: boolean;
+  part: { id: string; instrumentName: string; partName: string | null };
+  storageObject: { objectKey: string; originalFileName: string };
+}
 
 interface AudioAsset {
   id: string;
@@ -59,6 +69,13 @@ export default function SessionControlPage() {
     `/arrangements/${arrangementId}/audio`,
     { enabled: !!arrangementId }
   );
+  const { data: sheetMusicAssets } = useApiQuery<SheetMusicAsset[]>(
+    ["sheet-music", arrangementId || ""],
+    `/arrangements/${arrangementId}/sheet-music`,
+    { enabled: !!arrangementId }
+  );
+
+  const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
 
   // Connect to WebSocket for real-time updates
   const { isConnected } = useWebSocket({
@@ -287,6 +304,52 @@ export default function SessionControlPage() {
           </Card.Body>
         </Card.Root>
       )}
+
+      {/* Sheet Music Viewer */}
+      {(() => {
+        const activeSheets = sheetMusicAssets?.filter((a) => a.isActive) || [];
+        // Deduplicate by partId (one active sheet per part)
+        const partSheets = Array.from(
+          new Map(activeSheets.map((s) => [s.part.id, s])).values()
+        );
+        if (partSheets.length === 0) return null;
+        const currentPartId = selectedPartId || partSheets[0]?.part.id;
+        const currentSheet = partSheets.find((s) => s.part.id === currentPartId);
+        return (
+          <Card.Root mb={6}>
+            <Card.Body>
+              <Flex justify="space-between" align="center" mb={3}>
+                <Heading size="sm">Sheet Music</Heading>
+                <Flex gap={2} flexWrap="wrap">
+                  {partSheets.map((s) => (
+                    <Button
+                      key={s.part.id}
+                      size="xs"
+                      variant={s.part.id === currentPartId ? "solid" : "outline"}
+                      colorPalette={s.part.id === currentPartId ? "blue" : "gray"}
+                      onClick={() => setSelectedPartId(s.part.id)}
+                    >
+                      {s.part.instrumentName}
+                    </Button>
+                  ))}
+                </Flex>
+              </Flex>
+              {currentSheet ? (
+                <SheetMusicViewer
+                  fileUrl={`/api/v1/files/${currentSheet.storageObject.objectKey}`}
+                  fileType={currentSheet.fileType}
+                  fileName={currentSheet.storageObject.originalFileName}
+                  currentBar={transport?.currentBar}
+                />
+              ) : (
+                <Text color="gray.400" fontSize="sm">
+                  Select a part to view its sheet music.
+                </Text>
+              )}
+            </Card.Body>
+          </Card.Root>
+        );
+      })()}
 
       {/* Participants */}
       <Card.Root>
