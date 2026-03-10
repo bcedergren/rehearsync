@@ -23,8 +23,15 @@ import { useApiQuery, useApiMutation } from "@/hooks/useApi";
 interface BandSummary {
   id: string;
   name: string;
-  members: { id: string; displayName: string; role: string }[];
+  members: { id: string; displayName: string; role: string; defaultInstrument: string | null }[];
   _count: { songs: number };
+}
+
+interface SongSummary {
+  id: string;
+  title: string;
+  artist: string | null;
+  _count: { arrangements: number };
 }
 
 interface MeResponse {
@@ -85,6 +92,13 @@ export default function DashboardPage() {
   }
 
   const band = bands && bands.length === 1 ? bands[0] : null;
+
+  // Fetch songs for single-band view
+  const { data: songs } = useApiQuery<SongSummary[]>(
+    ["songs", band?.id ?? ""],
+    `/bands/${band?.id}/songs`,
+    { enabled: !!band }
+  );
   const showSingleBandView = band && !canCreateBand;
 
   return (
@@ -186,32 +200,7 @@ export default function DashboardPage() {
             </Card.Root>
           </SimpleGrid>
 
-          {/* Quick actions */}
-          <Card.Root bg="white" borderWidth="1px" borderColor="gray.100">
-            <Card.Body p={6}>
-              <Heading size="sm" color="gray.700" mb={4}>
-                Quick Actions
-              </Heading>
-              <Flex gap={3} wrap="wrap">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => router.push(`/bands/${band.id}`)}
-                >
-                  🎵 View Songs
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => router.push(`/bands/${band.id}/members`)}
-                >
-                  👥 Manage Members
-                </Button>
-              </Flex>
-            </Card.Body>
-          </Card.Root>
-
-          {/* Members at a glance */}
+          {/* Band members with instruments */}
           <Card.Root bg="white" borderWidth="1px" borderColor="gray.100">
             <Card.Body p={6}>
               <Flex justify="space-between" align="center" mb={4}>
@@ -219,12 +208,12 @@ export default function DashboardPage() {
                   Band Members
                 </Heading>
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="xs"
                   colorPalette="blue"
-                  onClick={() => router.push(`/bands/${band.id}/members`)}
+                  onClick={() => router.push(`/onboarding?tier=${tier}`)}
                 >
-                  View all
+                  Set Up Band
                 </Button>
               </Flex>
               <Flex gap={3} wrap="wrap">
@@ -252,9 +241,16 @@ export default function DashboardPage() {
                     >
                       {member.displayName.charAt(0).toUpperCase()}
                     </Box>
-                    <Text fontSize="sm" color="gray.700">
-                      {member.displayName}
-                    </Text>
+                    <Box>
+                      <Text fontSize="sm" color="gray.700" lineHeight="1.2">
+                        {member.displayName}
+                      </Text>
+                      {member.defaultInstrument && (
+                        <Text fontSize="xs" color="gray.400">
+                          {member.defaultInstrument}
+                        </Text>
+                      )}
+                    </Box>
                     {member.role === "leader" && (
                       <Badge
                         colorPalette="blue"
@@ -267,6 +263,70 @@ export default function DashboardPage() {
                   </Flex>
                 ))}
               </Flex>
+            </Card.Body>
+          </Card.Root>
+
+          {/* Songs list */}
+          <Card.Root bg="white" borderWidth="1px" borderColor="gray.100">
+            <Card.Body p={6}>
+              <Flex justify="space-between" align="center" mb={4}>
+                <Heading size="sm" color="gray.700">
+                  Songs
+                </Heading>
+                <Button
+                  variant="outline"
+                  size="xs"
+                  colorPalette="blue"
+                  onClick={() => router.push(`/bands/${band.id}`)}
+                >
+                  View all
+                </Button>
+              </Flex>
+              {!songs || songs.length === 0 ? (
+                <Flex direction="column" align="center" p={6} bg="gray.50" borderRadius="lg" textAlign="center">
+                  <Text fontSize="sm" color="gray.500" mb={3}>
+                    No songs yet
+                  </Text>
+                  <Button
+                    size="sm"
+                    colorPalette="blue"
+                    variant="outline"
+                    onClick={() => router.push(`/bands/${band.id}`)}
+                  >
+                    Add Your First Song
+                  </Button>
+                </Flex>
+              ) : (
+                <VStack align="stretch" gap={0}>
+                  {songs.map((song, i) => (
+                    <Flex
+                      key={song.id}
+                      align="center"
+                      py={2.5}
+                      px={3}
+                      gap={3}
+                      borderBottom={i < songs.length - 1 ? "1px solid" : "none"}
+                      borderColor="gray.100"
+                      cursor="pointer"
+                      borderRadius="md"
+                      _hover={{ bg: "gray.50" }}
+                      onClick={() => router.push(`/bands/${band.id}/songs/${song.id}`)}
+                    >
+                      <Text fontSize="sm" fontWeight="medium" color="gray.800" flex={1}>
+                        {song.title}
+                      </Text>
+                      {song.artist && (
+                        <Text fontSize="xs" color="gray.400">
+                          {song.artist}
+                        </Text>
+                      )}
+                      <Badge colorPalette="gray" variant="subtle" fontSize="xs">
+                        {song._count.arrangements} arr.
+                      </Badge>
+                    </Flex>
+                  ))}
+                </VStack>
+              )}
             </Card.Body>
           </Card.Root>
 

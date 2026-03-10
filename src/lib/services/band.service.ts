@@ -38,7 +38,7 @@ export async function listBandsForUser(userId: string) {
   return prisma.band.findMany({
     where: { members: { some: { userId, isActive: true } } },
     include: {
-      members: { where: { isActive: true }, select: { id: true, displayName: true, role: true } },
+      members: { where: { isActive: true }, select: { id: true, displayName: true, role: true, defaultInstrument: true } },
       _count: { select: { songs: true } },
     },
     orderBy: { updatedAt: "desc" },

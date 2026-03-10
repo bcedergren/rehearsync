@@ -62,10 +62,18 @@ export function Sidebar() {
 
       <VStack align="stretch" gap={0.5} flex={1}>
         {navItems.map((item) => {
+          // Check if a more specific nav item matches the current path
+          const moreSpecificMatch = navItems.some(
+            (other) =>
+              other.href !== item.href &&
+              other.href.startsWith(item.href + "/") &&
+              (pathname === other.href || pathname.startsWith(other.href + "/"))
+          );
           const isActive =
-            pathname === item.href ||
-            (item.href !== "/dashboard" &&
-              pathname.startsWith(item.href + "/"));
+            !moreSpecificMatch &&
+            (pathname === item.href ||
+              (item.href !== "/dashboard" &&
+                pathname.startsWith(item.href + "/")));
           return (
             <ChakraLink
               key={item.href}
