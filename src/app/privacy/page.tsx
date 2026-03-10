@@ -18,7 +18,7 @@ export default function PrivacyPage() {
         mx="auto"
       >
         <NextLink href="/">
-          <Image src="/logo.png" alt="RehearSync" width={140} height={32} />
+          <Image src="/logo.png" alt="RehearSync" width={140} height={32} style={{ height: "auto" }} />
         </NextLink>
       </Flex>
 

@@ -112,8 +112,8 @@ export default function SongDetailPage() {
           align="center"
           gap={2}
           mb={1}
-          className="group"
           cursor="pointer"
+          _hover={{ "& .edit-icon": { opacity: 1 } }}
           onClick={() => {
             setTitleDraft(song.title);
             setEditingTitle(true);
@@ -121,9 +121,9 @@ export default function SongDetailPage() {
         >
           <Heading size="lg">{song.title}</Heading>
           <Box
+            className="edit-icon"
             opacity={0}
             transition="opacity 0.15s"
-            sx={{ ".group:hover &": { opacity: 1 } }}
           >
             <Pencil size={16} color="var(--chakra-colors-gray-400)" />
           </Box>

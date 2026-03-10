@@ -57,7 +57,7 @@ export function Sidebar() {
       borderColor="gray.100"
     >
       <Box mb={8} px={2} pt={2}>
-        <Image src="/logo.png" alt="RehearSync" width={160} height={40} />
+        <Image src="/logo.png" alt="RehearSync" width={160} height={40} priority style={{ height: "auto" }} />
       </Box>
 
       <VStack align="stretch" gap={0.5} flex={1}>

@@ -105,7 +105,7 @@ export default function HomePage() {
         borderColor="gray.100"
       >
         <Box>
-          <Image src="/logo.png" alt="RehearsSync" width={180} height={45} />
+          <Image src="/logo.png" alt="RehearSync" width={180} height={45} priority style={{ height: "auto" }} />
         </Box>
         <Flex gap={3} align="center">
           <Button variant="ghost" color="gray.600" _hover={{ color: "gray.900" }} asChild>

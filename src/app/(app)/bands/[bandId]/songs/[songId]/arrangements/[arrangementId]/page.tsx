@@ -28,7 +28,7 @@ import { useProcessingJob } from "@/hooks/useProcessingJob";
 import { FileDropzone } from "@/components/uploads/FileDropzone";
 import { AssignmentReviewModal } from "@/components/assignments/AssignmentReviewModal";
 import { SyncMapEditorModal } from "@/components/sync-map/SyncMapEditorModal";
-import { Pencil } from "lucide-react";
+import { Eye, Pencil } from "lucide-react";
 import dynamic from "next/dynamic";
 const SheetMusicViewer = dynamic(
   () => import("@/components/sheet-music/SheetMusicViewer").then((m) => m.SheetMusicViewer),
@@ -1459,21 +1459,20 @@ export default function ArrangementDetailPage() {
                   border="2px solid"
                   borderColor={done ? "green.200" : isNext ? "blue.300" : "gray.100"}
                   transition="all 0.15s"
-                  _hover={{ borderColor: done ? "green.300" : "blue.300", shadow: "md", transform: "translateY(-1px)" }}
+                  _hover={{ borderColor: done ? "green.300" : "blue.300", shadow: "md", transform: "translateY(-1px)", "& .step-edit-icon": { opacity: 1 } }}
                   cursor="pointer"
                   onClick={() => handleStepAction(step.action)}
                   position="relative"
-                  className="group"
                 >
                   {/* Edit icon — visible on hover */}
                   <Box
+                    className="step-edit-icon"
                     position="absolute"
                     top={2}
                     right={2}
                     opacity={0}
                     transition="opacity 0.15s"
                     color="gray.400"
-                    sx={{ ".group:hover &": { opacity: 1 } }}
                   >
                     <Pencil size={14} />
                   </Box>
@@ -1622,6 +1621,8 @@ export default function ArrangementDetailPage() {
                               size="xs"
                               variant="ghost"
                               colorPalette="blue"
+                              p={1}
+                              minW="auto"
                               onClick={() =>
                                 setPreviewAsset({
                                   objectKey: part.sheetMusicAssets[0].storageObject.objectKey,
@@ -1629,8 +1630,9 @@ export default function ArrangementDetailPage() {
                                   fileName: part.sheetMusicAssets[0].storageObject.originalFileName,
                                 })
                               }
+                              title="Preview"
                             >
-                              Preview
+                              <Eye size={16} />
                             </Button>
                           </Flex>
                         ) : (
@@ -1795,6 +1797,8 @@ export default function ArrangementDetailPage() {
                             size="xs"
                             variant="ghost"
                             colorPalette="blue"
+                            p={1}
+                            minW="auto"
                             onClick={() => {
                               setPreviewAsset({
                                 objectKey: part.sheetMusicAssets[0].storageObject.objectKey,
@@ -1802,8 +1806,9 @@ export default function ArrangementDetailPage() {
                                 fileName: part.sheetMusicAssets[0].storageObject.originalFileName,
                               });
                             }}
+                            title="Preview"
                           >
-                            Preview
+                            <Eye size={16} />
                           </Button>
                         </Flex>
                       ))}
