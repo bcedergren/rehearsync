@@ -589,6 +589,16 @@ export default function HomePage() {
                 Pricing
               </Text>
             </NextLink>
+            <NextLink href="/privacy">
+              <Text fontSize="sm" color="gray.500" _hover={{ color: "gray.800" }}>
+                Privacy
+              </Text>
+            </NextLink>
+            <NextLink href="/terms">
+              <Text fontSize="sm" color="gray.500" _hover={{ color: "gray.800" }}>
+                Terms
+              </Text>
+            </NextLink>
             <NextLink href="/login">
               <Text fontSize="sm" color="gray.500" _hover={{ color: "gray.800" }}>
                 Sign In

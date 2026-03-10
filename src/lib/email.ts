@@ -5,6 +5,22 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM = process.env.EMAIL_FROM || "RehearSync <noreply@send.rehearsync.com>";
 const APP_URL = process.env.NEXTAUTH_URL || "http://localhost:3000";
 
+const LOGO_HEADER = `
+  <img src="${APP_URL}/logo_light.png" alt="RehearSync" width="160" style="display: block; margin-bottom: 24px;" />
+`;
+
+const EMAIL_FOOTER = `
+  <div style="border-top: 1px solid #e2e8f0; margin-top: 32px; padding-top: 20px; font-size: 12px; color: #a0aec0; line-height: 1.6;">
+    <a href="${APP_URL}" style="color: #a0aec0; text-decoration: none; font-weight: 600;">RehearSync</a> &middot; Rehearsal management for bands
+    <br />
+    You're receiving this email because of your RehearSync account.
+    <br />
+    <a href="${APP_URL}/privacy" style="color: #a0aec0; text-decoration: underline;">Privacy Policy</a> &middot; <a href="${APP_URL}/terms" style="color: #a0aec0; text-decoration: underline;">Terms of Service</a>
+    <br />
+    &copy; ${new Date().getFullYear()} RehearSync. All rights reserved.
+  </div>
+`;
+
 // ─── Welcome Email ──────────────────────────────────────────────
 
 export async function sendWelcomeEmail(to: string, name: string) {
@@ -14,6 +30,7 @@ export async function sendWelcomeEmail(to: string, name: string) {
     subject: "Welcome to RehearSync!",
     html: `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; padding: 40px 20px;">
+        ${LOGO_HEADER}
         <h1 style="font-size: 24px; font-weight: 700; color: #1a202c; margin-bottom: 8px;">Welcome to RehearSync!</h1>
         <p style="font-size: 16px; color: #4a5568; line-height: 1.6;">
           Hey ${name}, thanks for signing up. You're all set to organize your rehearsals.
@@ -31,6 +48,7 @@ export async function sendWelcomeEmail(to: string, name: string) {
         <p style="font-size: 13px; color: #a0aec0; margin-top: 32px;">
           If you didn't create this account, you can safely ignore this email.
         </p>
+        ${EMAIL_FOOTER}
       </div>
     `,
   });
@@ -47,6 +65,7 @@ export async function sendPasswordResetEmail(to: string, token: string) {
     subject: "Reset your RehearSync password",
     html: `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; padding: 40px 20px;">
+        ${LOGO_HEADER}
         <h1 style="font-size: 24px; font-weight: 700; color: #1a202c; margin-bottom: 8px;">Reset your password</h1>
         <p style="font-size: 16px; color: #4a5568; line-height: 1.6;">
           We received a request to reset your password. Click the button below to choose a new one.
@@ -60,6 +79,7 @@ export async function sendPasswordResetEmail(to: string, token: string) {
         <p style="font-size: 12px; color: #a0aec0; margin-top: 32px; word-break: break-all;">
           Or copy this link: ${resetUrl}
         </p>
+        ${EMAIL_FOOTER}
       </div>
     `,
   });
@@ -79,6 +99,7 @@ export async function sendBandInviteEmail(
     subject: `You're invited to join ${bandName} on RehearSync`,
     html: `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; padding: 40px 20px;">
+        ${LOGO_HEADER}
         <h1 style="font-size: 24px; font-weight: 700; color: #1a202c; margin-bottom: 8px;">You're invited!</h1>
         <p style="font-size: 16px; color: #4a5568; line-height: 1.6;">
           <strong>${inviterName}</strong> has invited you to join <strong>${bandName}</strong> on RehearSync — the rehearsal management platform for bands.
@@ -92,6 +113,7 @@ export async function sendBandInviteEmail(
         <p style="font-size: 13px; color: #a0aec0; margin-top: 32px;">
           If you don't have an account yet, you'll be able to create one when you click the link.
         </p>
+        ${EMAIL_FOOTER}
       </div>
     `,
   });
