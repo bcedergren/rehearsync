@@ -11,9 +11,10 @@ import {
   Flex,
   Badge,
   Card,
+  Spinner,
 } from "@chakra-ui/react";
 import { useRouter } from "next/navigation";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { apiFetch, useApiQuery } from "@/hooks/useApi";
 import { Plus, Trash2, Mail, Check } from "lucide-react";
 
@@ -28,6 +29,23 @@ interface MemberEntry {
   name: string;
   instrument: string;
   email: string;
+  /** If set, this is an existing member from the DB — name is read-only */
+  existingMemberId?: string;
+}
+
+interface MeResponse {
+  user: { id: string; tier: string; name: string | null };
+}
+
+interface BandSummary {
+  id: string;
+  name: string;
+  members: {
+    id: string;
+    displayName: string;
+    role: string;
+    defaultInstrument: string | null;
+  }[];
 }
 
 function newMember(): MemberEntry {
@@ -38,27 +56,57 @@ export default function OnboardingPage() {
   return <OnboardingWizard />;
 }
 
-interface MeResponse {
-  user: { id: string; tier: string; name: string | null };
-}
-
 function OnboardingWizard() {
   const router = useRouter();
   const { data: meData } = useApiQuery<MeResponse>(["me"], "/me");
+  const { data: bands, isLoading: bandsLoading } = useApiQuery<BandSummary[]>(
+    ["bands"],
+    "/bands"
+  );
   const tier = meData?.user?.tier || "free";
   const maxMembers = TIER_MEMBER_LIMITS[tier] || 2;
+
+  // Existing band (edit mode)
+  const existingBand = bands && bands.length > 0 ? bands[0] : null;
+  const isEditMode = !!existingBand;
 
   const [step, setStep] = useState(0);
   const [bandName, setBandName] = useState("");
   const [members, setMembers] = useState<MemberEntry[]>([newMember()]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [initialized, setInitialized] = useState(false);
   const [result, setResult] = useState<{
     bandId: string;
     invites: { name: string; email?: string; joinUrl: string }[];
   } | null>(null);
 
-  const canAddMore = members.length < maxMembers - 1; // -1 for leader
+  // Pre-fill from existing band
+  useEffect(() => {
+    if (initialized || bandsLoading) return;
+    if (existingBand) {
+      setBandName(existingBand.name);
+      // Load existing non-leader members
+      const existingMembers: MemberEntry[] = existingBand.members
+        .filter((m) => m.role !== "leader")
+        .map((m) => ({
+          id: crypto.randomUUID(),
+          name: m.displayName,
+          instrument: m.defaultInstrument || "",
+          email: "",
+          existingMemberId: m.id,
+        }));
+      setMembers(existingMembers.length > 0 ? existingMembers : [newMember()]);
+      setInitialized(true);
+    } else if (bands) {
+      // No existing band — create mode, already initialized
+      setInitialized(true);
+    }
+  }, [existingBand, bands, bandsLoading, initialized]);
+
+  const existingMemberCount = members.filter((m) => m.existingMemberId).length;
+  const totalMembers = members.filter((m) => m.name.trim()).length + 1; // +1 for leader
+  const canAddMore = totalMembers < maxMembers;
 
   const addMember = useCallback(() => {
     if (canAddMore) setMembers((m) => [...m, newMember()]);
@@ -81,29 +129,96 @@ function OnboardingWizard() {
     setSubmitting(true);
     setError("");
     try {
-      const validMembers = members
-        .filter((m) => m.name.trim())
-        .map((m) => ({
-          name: m.name.trim(),
-          instrument: m.instrument.trim() || undefined,
-          email: m.email.trim() || undefined,
-        }));
-
-      const res = await apiFetch<{
-        bandId: string;
-        bandName: string;
-        invites: { name: string; email?: string; joinUrl: string }[];
-      }>("/onboarding", {
-        method: "POST",
-        body: JSON.stringify({ bandName, members: validMembers }),
-      });
-
-      setResult(res);
-      setStep(4); // done step
+      if (isEditMode && existingBand) {
+        await handleEditSubmit(existingBand);
+      } else {
+        await handleCreateSubmit();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
       setSubmitting(false);
     }
+  }
+
+  async function handleCreateSubmit() {
+    const validMembers = members
+      .filter((m) => m.name.trim())
+      .map((m) => ({
+        name: m.name.trim(),
+        instrument: m.instrument.trim() || undefined,
+        email: m.email.trim() || undefined,
+      }));
+
+    const res = await apiFetch<{
+      bandId: string;
+      bandName: string;
+      invites: { name: string; email?: string; joinUrl: string }[];
+    }>("/onboarding", {
+      method: "POST",
+      body: JSON.stringify({ bandName, members: validMembers }),
+    });
+
+    setResult(res);
+    setStep(4);
+  }
+
+  async function handleEditSubmit(band: BandSummary) {
+    const bandId = band.id;
+
+    // 1. Update band name if changed
+    if (bandName.trim() !== band.name) {
+      await apiFetch(`/bands/${bandId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name: bandName.trim() }),
+      });
+    }
+
+    // 2. Update existing members' instruments
+    for (const m of members) {
+      if (m.existingMemberId && m.instrument.trim()) {
+        const original = band.members.find(
+          (bm) => bm.id === m.existingMemberId
+        );
+        if (original && (original.defaultInstrument || "") !== m.instrument.trim()) {
+          await apiFetch(`/bands/${bandId}/members/${m.existingMemberId}`, {
+            method: "PATCH",
+            body: JSON.stringify({
+              defaultInstrument: m.instrument.trim(),
+            }),
+          });
+        }
+      }
+    }
+
+    // 3. Create invites for new members
+    const newMembers = members.filter(
+      (m) => !m.existingMemberId && m.name.trim()
+    );
+    const inviteResults: { name: string; email?: string; joinUrl: string }[] =
+      [];
+
+    for (const m of newMembers) {
+      const link = await apiFetch<{ code: string }>(
+        `/bands/${bandId}/invites`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            maxUses: 1,
+            expiresInHours: 168,
+            ...(m.email.trim() ? { email: m.email.trim() } : {}),
+          }),
+        }
+      );
+      const appUrl = window.location.origin;
+      inviteResults.push({
+        name: m.name.trim(),
+        email: m.email.trim() || undefined,
+        joinUrl: `${appUrl}/join/${link.code}`,
+      });
+    }
+
+    setResult({ bandId, invites: inviteResults });
+    setStep(4);
   }
 
   const STEPS = [
@@ -112,6 +227,14 @@ function OnboardingWizard() {
     { label: "Instruments", num: 3 },
     { label: "Invites", num: 4 },
   ];
+
+  if (bandsLoading || !initialized) {
+    return (
+      <Flex justify="center" align="center" minH="60vh">
+        <Spinner size="lg" color="blue.500" />
+      </Flex>
+    );
+  }
 
   return (
     <Box maxW="600px" mx="auto" py={12} px={4}>
@@ -160,7 +283,7 @@ function OnboardingWizard() {
         <Card.Root>
           <Card.Body p={8}>
             <Heading size="lg" mb={2} color="gray.800">
-              What's your band called?
+              {isEditMode ? "Update your band name" : "What's your band called?"}
             </Heading>
             <Text color="gray.500" mb={6}>
               You can always change this later.
@@ -204,10 +327,12 @@ function OnboardingWizard() {
             </Heading>
             <Flex align="center" gap={2} mb={6}>
               <Text color="gray.500">
-                Add your band members by name.
+                {isEditMode
+                  ? "Your current members and any new ones to invite."
+                  : "Add your band members by name."}
               </Text>
               <Badge colorPalette="blue" variant="subtle" fontSize="xs">
-                {members.length + 1}/{maxMembers === 999 ? "∞" : maxMembers}
+                {totalMembers}/{maxMembers === 999 ? "\u221e" : maxMembers}
               </Badge>
             </Flex>
 
@@ -224,7 +349,7 @@ function OnboardingWizard() {
             >
               <Badge colorPalette="blue" fontSize="xs">You (Leader)</Badge>
               <Text fontSize="sm" color="gray.600" flex={1}>
-                You'll be added automatically
+                {isEditMode ? "Already a member" : "You'll be added automatically"}
               </Text>
             </Flex>
 
@@ -234,15 +359,31 @@ function OnboardingWizard() {
                   <Text fontSize="sm" color="gray.400" w="20px" flexShrink={0}>
                     {i + 2}.
                   </Text>
-                  <Input
-                    value={m.name}
-                    onChange={(e) => updateMember(m.id, "name", e.target.value)}
-                    placeholder="Member name"
-                    size="sm"
-                    flex={1}
-                    autoFocus={i === 0}
-                  />
-                  {members.length > 1 && (
+                  {m.existingMemberId ? (
+                    <Flex align="center" gap={2} flex={1}>
+                      <Input
+                        value={m.name}
+                        size="sm"
+                        flex={1}
+                        readOnly
+                        bg="gray.50"
+                        color="gray.600"
+                      />
+                      <Badge colorPalette="green" variant="subtle" fontSize="2xs">
+                        Joined
+                      </Badge>
+                    </Flex>
+                  ) : (
+                    <Input
+                      value={m.name}
+                      onChange={(e) => updateMember(m.id, "name", e.target.value)}
+                      placeholder="Member name"
+                      size="sm"
+                      flex={1}
+                      autoFocus={i === members.length - 1 && !m.existingMemberId}
+                    />
+                  )}
+                  {!m.existingMemberId && members.filter((x) => !x.existingMemberId).length > 1 && (
                     <Button
                       size="xs"
                       variant="ghost"
@@ -268,7 +409,7 @@ function OnboardingWizard() {
                 <Plus size={14} /> Add Member
               </Button>
             )}
-            {!canAddMore && members.length >= maxMembers - 1 && (
+            {!canAddMore && (
               <Text fontSize="xs" color="orange.500" mb={4}>
                 {maxMembers === 999
                   ? ""
@@ -284,7 +425,10 @@ function OnboardingWizard() {
                 colorPalette="blue"
                 flex={1}
                 onClick={() => setStep(2)}
-                disabled={!members.some((m) => m.name.trim())}
+                disabled={
+                  !members.some((m) => m.name.trim()) &&
+                  existingMemberCount === 0
+                }
               >
                 Next
               </Button>
@@ -358,7 +502,7 @@ function OnboardingWizard() {
 
             <VStack gap={3} mb={6}>
               {members
-                .filter((m) => m.name.trim())
+                .filter((m) => m.name.trim() && !m.existingMemberId)
                 .map((m) => (
                   <Flex key={m.id} gap={3} w="full" align="center">
                     <Text
@@ -386,6 +530,12 @@ function OnboardingWizard() {
                     </Flex>
                   </Flex>
                 ))}
+              {members.filter((m) => m.name.trim() && !m.existingMemberId)
+                .length === 0 && (
+                <Text fontSize="sm" color="gray.500" textAlign="center" py={4}>
+                  No new members to invite. Click save to update instruments.
+                </Text>
+              )}
             </VStack>
 
             {error && (
@@ -407,7 +557,20 @@ function OnboardingWizard() {
               <Button variant="outline" flex={1} onClick={() => setStep(2)}>
                 Back
               </Button>
-              {members.some((m) => m.email.trim()) ? (
+              {isEditMode ? (
+                <Button
+                  colorPalette="blue"
+                  flex={1}
+                  onClick={handleSubmit}
+                  loading={submitting}
+                >
+                  {members.some((m) => !m.existingMemberId && m.email.trim())
+                    ? "Save & Send Invites"
+                    : members.some((m) => !m.existingMemberId && m.name.trim())
+                      ? "Save & Create Invites"
+                      : "Save Changes"}
+                </Button>
+              ) : members.some((m) => m.email.trim()) ? (
                 <Button
                   colorPalette="blue"
                   flex={1}
@@ -439,12 +602,16 @@ function OnboardingWizard() {
               🎉
             </Text>
             <Heading size="lg" mb={2} color="gray.800">
-              {result.bandId ? `${bandName} is ready!` : "All set!"}
+              {isEditMode ? `${bandName} updated!` : `${bandName} is ready!`}
             </Heading>
             <Text color="gray.500" mb={6}>
-              {result.invites.some((i) => i.email)
-                ? "Invite emails have been sent. Your band members can join using the link in their inbox."
-                : "Share the invite link below with your band members."}
+              {result.invites.length > 0
+                ? result.invites.some((i) => i.email)
+                  ? "Invite emails have been sent. Your band members can join using the link in their inbox."
+                  : "Share the invite link below with your band members."
+                : isEditMode
+                  ? "Your band has been updated successfully."
+                  : "Your band is set up and ready to go."}
             </Text>
 
             {result.invites.length > 0 && (
