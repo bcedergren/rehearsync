@@ -13,7 +13,11 @@ import { useApiQuery } from "@/hooks/useApi";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useSessionStore } from "@/stores/session.store";
 import { SheetMusicViewer } from "@/components/sheet-music/SheetMusicViewer";
-import { AudioPlayer } from "@/components/audio/AudioPlayer";
+import dynamic from "next/dynamic";
+const AudioPlayer = dynamic(
+  () => import("@/components/audio/AudioPlayer").then((m) => m.AudioPlayer),
+  { ssr: false }
+);
 
 interface MusicianView {
   memberId: string;

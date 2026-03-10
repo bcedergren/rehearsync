@@ -17,8 +17,12 @@ import { useState } from "react";
 import { useApiQuery, useApiMutation, apiFetch } from "@/hooks/useApi";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useSessionStore } from "@/stores/session.store";
-import { AudioPlayer } from "@/components/audio/AudioPlayer";
 import { SheetMusicViewer } from "@/components/sheet-music/SheetMusicViewer";
+import dynamic from "next/dynamic";
+const AudioPlayer = dynamic(
+  () => import("@/components/audio/AudioPlayer").then((m) => m.AudioPlayer),
+  { ssr: false }
+);
 
 interface SheetMusicAsset {
   id: string;
