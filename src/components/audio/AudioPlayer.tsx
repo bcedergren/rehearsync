@@ -11,8 +11,6 @@ import {
 } from "@chakra-ui/react";
 import { useSignedUrls } from "@/hooks/useSignedUrl";
 import { Play, Pause, Volume2 } from "lucide-react";
-// WaveSurfer type imported inline to avoid Turbopack SSR evaluation
-type WaveSurferInstance = InstanceType<Awaited<typeof import("wavesurfer.js")>["default"]>;
 
 interface AudioTrack {
   id: string;
@@ -70,7 +68,8 @@ export function AudioPlayer({
 
   // Waveform refs
   const waveformContainerRef = useRef<HTMLDivElement | null>(null);
-  const wavesurferRef = useRef<WaveSurferInstance | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const wavesurferRef = useRef<any>(null);
   const wavesurferReadyRef = useRef(false);
 
   const activeTrack = tracks.find((t) => t.id === activeTrackId) || tracks[0];

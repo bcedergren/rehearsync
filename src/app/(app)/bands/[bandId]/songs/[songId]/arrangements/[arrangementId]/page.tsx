@@ -26,8 +26,11 @@ import { useApiQuery, useApiMutation } from "@/hooks/useApi";
 import { useUpload } from "@/hooks/useUpload";
 import { useProcessingJob } from "@/hooks/useProcessingJob";
 import { FileDropzone } from "@/components/uploads/FileDropzone";
-import { SheetMusicViewer } from "@/components/sheet-music/SheetMusicViewer";
 import dynamic from "next/dynamic";
+const SheetMusicViewer = dynamic(
+  () => import("@/components/sheet-music/SheetMusicViewer").then((m) => m.SheetMusicViewer),
+  { ssr: false }
+);
 const AudioPlayer = dynamic(
   () => import("@/components/audio/AudioPlayer").then((m) => m.AudioPlayer),
   { ssr: false }
@@ -420,41 +423,16 @@ export default function ArrangementDetailPage() {
   // Expanded step for AI extras
   const [expandedStep, setExpandedStep] = useState<string | null>(null);
 
-  if (isLoading || !arrangement) {
-    return (
-      <Flex justify="center" align="center" minH="60vh">
-        <Spinner size="lg" color="blue.500" />
-      </Flex>
-    );
-  }
-
-  const basePath = `/bands/${bandId}/songs/${songId}/arrangements/${arrangementId}`;
-
-  const statusConfig: Record<string, { color: string; label: string }> = {
-    draft: { color: "yellow", label: "Draft" },
-    published: { color: "green", label: "Published" },
-    archived: { color: "gray", label: "Archived" },
-  };
-  const status = statusConfig[arrangement.status] || statusConfig.draft;
-
-  // Derived state
-  const fullMix = arrangement.audioAssets.find((a) => a.assetRole === "full_mix");
-  const stems = arrangement.audioAssets.filter((a) => a.assetRole === "stem");
+  // Derived state (computed before early return so hooks below always run)
+  const fullMix = arrangement?.audioAssets.find((a) => a.assetRole === "full_mix");
+  const stems = arrangement?.audioAssets.filter((a) => a.assetRole === "stem") ?? [];
   const hasStems = stems.length > 0;
-  const hasParts = arrangement.parts.length > 0;
-  const hasCharts = arrangement.parts.some((p) => p.sheetMusicAssets.length > 0);
-  const hasAudio = arrangement.audioAssets.length > 0;
-  const hasAssignments = arrangement.parts.some((p) => p.assignments.length > 0);
-  const hasSections = arrangement.sectionMarkers.length > 0;
+  const hasParts = (arrangement?.parts.length ?? 0) > 0;
+  const hasCharts = arrangement?.parts.some((p) => p.sheetMusicAssets.length > 0) ?? false;
+  const hasAudio = (arrangement?.audioAssets.length ?? 0) > 0;
+  const hasAssignments = arrangement?.parts.some((p) => p.assignments.length > 0) ?? false;
+  const hasSections = (arrangement?.sectionMarkers.length ?? 0) > 0;
   const hasSyncMap = readiness?.checks.activeSyncMapPresent ?? false;
-
-  const stepStatus = [hasAudio, hasParts, hasCharts, hasAssignments, hasSections, hasSyncMap];
-  const completedSteps = stepStatus.filter(Boolean).length;
-  const totalSteps = stepStatus.length;
-  const progressPct = Math.round((completedSteps / totalSteps) * 100);
-
-  // Find the first incomplete step for "next step" guidance
-  const nextStepIndex = stepStatus.findIndex((done) => !done);
 
   // Auto-trigger stem separation when full mix exists and no stems yet
   const autoStemSeparationRef = useRef(false);
@@ -539,7 +517,7 @@ export default function ArrangementDetailPage() {
   // Stems available for transcription
   const stemsForTranscription = stems.filter((stem) => {
     if (!stem.stemName) return false;
-    const matchingPart = arrangement.parts.find((p) =>
+    const matchingPart = arrangement?.parts.find((p) =>
       p.instrumentName.toLowerCase().includes(stem.stemName!.toLowerCase())
     );
     return matchingPart && matchingPart.sheetMusicAssets.length === 0;
@@ -564,6 +542,31 @@ export default function ArrangementDetailPage() {
     autoTranscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stemsForTranscription, isTranscribing]);
+
+  if (isLoading || !arrangement) {
+    return (
+      <Flex justify="center" align="center" minH="60vh">
+        <Spinner size="lg" color="blue.500" />
+      </Flex>
+    );
+  }
+
+  const basePath = `/bands/${bandId}/songs/${songId}/arrangements/${arrangementId}`;
+
+  const statusConfig: Record<string, { color: string; label: string }> = {
+    draft: { color: "yellow", label: "Draft" },
+    published: { color: "green", label: "Published" },
+    archived: { color: "gray", label: "Archived" },
+  };
+  const status = statusConfig[arrangement.status] || statusConfig.draft;
+
+  const stepStatus = [hasAudio, hasParts, hasCharts, hasAssignments, hasSections, hasSyncMap];
+  const completedSteps = stepStatus.filter(Boolean).length;
+  const totalSteps = stepStatus.length;
+  const progressPct = Math.round((completedSteps / totalSteps) * 100);
+
+  // Find the first incomplete step for "next step" guidance
+  const nextStepIndex = stepStatus.findIndex((done) => !done);
 
   // --- Step action handlers ---
 
@@ -956,7 +959,8 @@ export default function ArrangementDetailPage() {
               return (
                 <Box
                   key={step.key}
-                  as="button"
+                  role="button"
+                  tabIndex={0}
                   textAlign="left"
                   p={3}
                   borderRadius="xl"
