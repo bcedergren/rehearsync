@@ -31,6 +31,8 @@ interface MemberEntry {
   email: string;
   /** If set, this is an existing member from the DB — name is read-only */
   existingMemberId?: string;
+  /** Populated after band/members are saved in step 1 */
+  joinUrl?: string;
 }
 
 interface MeResponse {
@@ -81,6 +83,8 @@ function OnboardingWizard() {
     invites: { name: string; email?: string; joinUrl: string }[];
   } | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [savedBandId, setSavedBandId] = useState<string | null>(null);
+  const [savingMembers, setSavingMembers] = useState(false);
 
   // Pre-fill from existing band
   useEffect(() => {
@@ -126,100 +130,136 @@ function OnboardingWizard() {
     []
   );
 
+  // Save band + members when clicking "Next" on step 1
+  async function handleSaveBandMembers() {
+    setSavingMembers(true);
+    setError("");
+    try {
+      const validMembers = members
+        .filter((m) => m.name.trim() && !m.existingMemberId)
+        .map((m) => ({
+          name: m.name.trim(),
+          instrument: m.instrument.trim() || undefined,
+        }));
+
+      if (isEditMode && existingBand) {
+        const bandId = existingBand.id;
+
+        // Update band name if changed
+        if (bandName.trim() !== existingBand.name) {
+          await apiFetch(`/bands/${bandId}`, {
+            method: "PATCH",
+            body: JSON.stringify({ name: bandName.trim() }),
+          });
+        }
+
+        // Create invite links for new members (no emails yet)
+        for (const m of validMembers) {
+          const link = await apiFetch<{ code: string }>(
+            `/bands/${bandId}/invites`,
+            {
+              method: "POST",
+              body: JSON.stringify({ maxUses: 1, expiresInHours: 168 }),
+            }
+          );
+          // Store the join URL on the member entry for later
+          const entry = members.find(
+            (e) => !e.existingMemberId && e.name.trim() === m.name
+          );
+          if (entry) {
+            entry.joinUrl = `${window.location.origin}/join/${link.code}`;
+          }
+        }
+        setSavedBandId(bandId);
+      } else {
+        // Create mode: create band via onboarding endpoint (no emails)
+        const res = await apiFetch<{
+          bandId: string;
+          bandName: string;
+          invites: { name: string; email?: string; joinUrl: string }[];
+        }>("/onboarding", {
+          method: "POST",
+          body: JSON.stringify({ bandName, members: validMembers }),
+        });
+
+        setSavedBandId(res.bandId);
+
+        // Store joinUrls on member entries for the result step
+        for (const inv of res.invites) {
+          const entry = members.find(
+            (e) => !e.existingMemberId && e.name.trim() === inv.name
+          );
+          if (entry) entry.joinUrl = inv.joinUrl;
+        }
+      }
+
+      setStep(2);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save members");
+    } finally {
+      setSavingMembers(false);
+    }
+  }
+
   async function handleSubmit() {
     setSubmitting(true);
     setError("");
     try {
-      if (isEditMode && existingBand) {
-        await handleEditSubmit(existingBand);
-      } else {
-        await handleCreateSubmit();
+      const bandId = savedBandId || existingBand?.id;
+      if (!bandId) throw new Error("Band not saved yet");
+
+      // Update instruments for all members
+      for (const m of members) {
+        if (m.existingMemberId && m.instrument.trim()) {
+          const original = existingBand?.members.find(
+            (bm) => bm.id === m.existingMemberId
+          );
+          if (!original || (original.defaultInstrument || "") !== m.instrument.trim()) {
+            await apiFetch(`/bands/${bandId}/members/${m.existingMemberId}`, {
+              method: "PATCH",
+              body: JSON.stringify({ defaultInstrument: m.instrument.trim() }),
+            });
+          }
+        }
       }
+
+      // For new members with emails, create a new invite with email (triggers email send)
+      const newMembers = members.filter(
+        (m) => !m.existingMemberId && m.name.trim()
+      );
+      for (const m of newMembers) {
+        if (m.email.trim()) {
+          const link = await apiFetch<{ code: string }>(
+            `/bands/${bandId}/invites`,
+            {
+              method: "POST",
+              body: JSON.stringify({
+                maxUses: 1,
+                expiresInHours: 168,
+                email: m.email.trim(),
+              }),
+            }
+          );
+          // Update joinUrl to the email-linked invite
+          m.joinUrl = `${window.location.origin}/join/${link.code}`;
+        }
+      }
+
+      // Build result from stored joinUrls
+      const inviteResults = newMembers
+        .filter((m) => m.joinUrl)
+        .map((m) => ({
+          name: m.name.trim(),
+          email: m.email.trim() || undefined,
+          joinUrl: m.joinUrl!,
+        }));
+
+      setResult({ bandId, invites: inviteResults });
+      setStep(4);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
       setSubmitting(false);
     }
-  }
-
-  async function handleCreateSubmit() {
-    const validMembers = members
-      .filter((m) => m.name.trim())
-      .map((m) => ({
-        name: m.name.trim(),
-        instrument: m.instrument.trim() || undefined,
-        email: m.email.trim() || undefined,
-      }));
-
-    const res = await apiFetch<{
-      bandId: string;
-      bandName: string;
-      invites: { name: string; email?: string; joinUrl: string }[];
-    }>("/onboarding", {
-      method: "POST",
-      body: JSON.stringify({ bandName, members: validMembers }),
-    });
-
-    setResult(res);
-    setStep(4);
-  }
-
-  async function handleEditSubmit(band: BandSummary) {
-    const bandId = band.id;
-
-    // 1. Update band name if changed
-    if (bandName.trim() !== band.name) {
-      await apiFetch(`/bands/${bandId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ name: bandName.trim() }),
-      });
-    }
-
-    // 2. Update existing members' instruments
-    for (const m of members) {
-      if (m.existingMemberId && m.instrument.trim()) {
-        const original = band.members.find(
-          (bm) => bm.id === m.existingMemberId
-        );
-        if (original && (original.defaultInstrument || "") !== m.instrument.trim()) {
-          await apiFetch(`/bands/${bandId}/members/${m.existingMemberId}`, {
-            method: "PATCH",
-            body: JSON.stringify({
-              defaultInstrument: m.instrument.trim(),
-            }),
-          });
-        }
-      }
-    }
-
-    // 3. Create invites for new members
-    const newMembers = members.filter(
-      (m) => !m.existingMemberId && m.name.trim()
-    );
-    const inviteResults: { name: string; email?: string; joinUrl: string }[] =
-      [];
-
-    for (const m of newMembers) {
-      const link = await apiFetch<{ code: string }>(
-        `/bands/${bandId}/invites`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            maxUses: 1,
-            expiresInHours: 168,
-            ...(m.email.trim() ? { email: m.email.trim() } : {}),
-          }),
-        }
-      );
-      const appUrl = window.location.origin;
-      inviteResults.push({
-        name: m.name.trim(),
-        email: m.email.trim() || undefined,
-        joinUrl: `${appUrl}/join/${link.code}`,
-      });
-    }
-
-    setResult({ bandId, invites: inviteResults });
-    setStep(4);
   }
 
   const STEPS = [
@@ -418,6 +458,12 @@ function OnboardingWizard() {
               </Text>
             )}
 
+            {error && (
+              <Box p={3} mb={4} bg="red.50" borderRadius="md" border="1px solid" borderColor="red.100">
+                <Text color="red.600" fontSize="sm">{error}</Text>
+              </Box>
+            )}
+
             <Flex gap={3}>
               <Button variant="outline" flex={1} onClick={() => setStep(0)}>
                 Back
@@ -425,7 +471,8 @@ function OnboardingWizard() {
               <Button
                 colorPalette="blue"
                 flex={1}
-                onClick={() => setStep(2)}
+                onClick={handleSaveBandMembers}
+                loading={savingMembers}
                 disabled={
                   !members.some((m) => m.name.trim()) &&
                   existingMemberCount === 0

@@ -28,6 +28,7 @@ import { useState } from "react";
 const PLANS = [
   {
     name: "Free",
+    tier: "free",
     monthlyPrice: "$0",
     yearlyPrice: "$0",
     period: "forever",
@@ -45,6 +46,7 @@ const PLANS = [
   },
   {
     name: "Band",
+    tier: "band",
     monthlyPrice: "$29.99",
     yearlyPrice: "$299",
     period: "/month",
@@ -65,6 +67,7 @@ const PLANS = [
   },
   {
     name: "Agent",
+    tier: "agent",
     monthlyPrice: "$99.99",
     yearlyPrice: "$999",
     period: "/month",
@@ -529,7 +532,7 @@ export default function HomePage() {
                   _hover={plan.highlight ? { bg: "whiteAlpha.200" } : undefined}
                   asChild
                 >
-                  <NextLink href="/register">{plan.cta}</NextLink>
+                  <NextLink href={`/register?plan=${plan.tier}&interval=${interval}`}>{plan.cta}</NextLink>
                 </Button>
               </Card.Body>
             </Card.Root>

@@ -11,7 +11,8 @@ import {
   Card,
   SimpleGrid,
 } from "@chakra-ui/react";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import { useApiQuery } from "@/hooks/useApi";
 
 interface UserProfile {
@@ -71,11 +72,25 @@ const PLANS = [
 ];
 
 export default function PricingPage() {
-  const [interval, setInterval] = useState<"monthly" | "yearly">("monthly");
+  const searchParams = useSearchParams();
+  const urlPlan = searchParams.get("plan") as "band" | "agent" | null;
+  const urlInterval = searchParams.get("interval") as "monthly" | "yearly" | null;
+  const [interval, setInterval] = useState<"monthly" | "yearly">(urlInterval || "monthly");
   const [loadingTier, setLoadingTier] = useState<string | null>(null);
   const { data: user } = useApiQuery<UserProfile>(["me"], "/me");
 
   const currentTier = user?.tier || "free";
+
+  // Auto-trigger checkout if arriving with plan params (e.g. from login redirect)
+  const autoCheckoutRef = useRef(false);
+  useEffect(() => {
+    if (!urlPlan || !user || autoCheckoutRef.current) return;
+    if (currentTier === "free" && (urlPlan === "band" || urlPlan === "agent")) {
+      autoCheckoutRef.current = true;
+      handleSubscribe(urlPlan);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlPlan, user, currentTier]);
 
   async function handleSubscribe(tier: "band" | "agent") {
     setLoadingTier(tier);

@@ -29,6 +29,9 @@ function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") || "/onboarding";
+  const plan = searchParams.get("plan") || "free"; // free | band | agent
+  const interval = searchParams.get("interval") || "monthly"; // monthly | yearly
+  const isPaidPlan = plan === "band" || plan === "agent";
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -74,14 +77,46 @@ function RegisterForm() {
       return;
     }
 
+    // For paid plans, redirect to Stripe checkout; for free, go to onboarding
+    if (isPaidPlan) {
+      try {
+        const checkoutRes = await fetch("/api/v1/stripe/checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tier: plan, interval }),
+        });
+        const checkoutJson = await checkoutRes.json();
+        if (checkoutRes.ok && checkoutJson.data?.url) {
+          window.location.href = checkoutJson.data.url;
+          return;
+        }
+      } catch {
+        // If checkout fails, fall through to onboarding
+      }
+    }
     router.push(callbackUrl);
   }
 
-  const PERKS = [
-    { label: "1 band, 2 members", detail: "Enough to try it with your duo" },
-    { label: "PDF sheet music", detail: "Upload and share charts instantly" },
-    { label: "Part assignments", detail: "Everyone sees their own part" },
-  ];
+  const PERKS_BY_PLAN: Record<string, { label: string; detail: string }[]> = {
+    free: [
+      { label: "1 band, 2 members", detail: "Enough to try it with your duo" },
+      { label: "PDF sheet music", detail: "Upload and share charts instantly" },
+      { label: "Part assignments", detail: "Everyone sees their own part" },
+    ],
+    band: [
+      { label: "Up to 15 members", detail: "Enough for any band or ensemble" },
+      { label: "AI stem separation", detail: "Auto-split your full mix into 6 stems" },
+      { label: "AI sheet music generation", detail: "Auto-transcribe stems to MusicXML" },
+      { label: "Unlimited songs", detail: "No limits on your setlist" },
+    ],
+    agent: [
+      { label: "Unlimited bands & members", detail: "Manage as many groups as you need" },
+      { label: "Live rehearsal sync", detail: "Real-time transport for the whole band" },
+      { label: "Everything in Band", detail: "AI stems, charts, sections & more" },
+      { label: "Dedicated support", detail: "Priority help when you need it" },
+    ],
+  };
+  const PERKS = PERKS_BY_PLAN[plan] || PERKS_BY_PLAN.free;
 
   return (
     <Flex minH="100vh">
@@ -129,8 +164,9 @@ function RegisterForm() {
               Start rehearsing.
             </Heading>
             <Text color="gray.300" fontSize="md" maxW="380px" mx="auto" lineHeight="1.7" mb={8}>
-              The free plan includes everything you need to see if RehearSync
-              fits your workflow. No credit card, no trial timer.
+              {isPaidPlan
+                ? `The ${plan.charAt(0).toUpperCase() + plan.slice(1)} plan unlocks the full power of RehearSync. You'll set up billing after creating your account.`
+                : "The free plan includes everything you need to see if RehearSync fits your workflow. No credit card, no trial timer."}
             </Text>
 
             {/* What you get with free */}
@@ -194,7 +230,9 @@ function RegisterForm() {
             Create your account
           </Heading>
           <Text color="gray.400" mb={8}>
-            Free forever — upgrade when your band outgrows it
+            {isPaidPlan
+              ? `Sign up to start your ${plan.charAt(0).toUpperCase() + plan.slice(1)} plan (${interval === "yearly" ? "annual" : "monthly"} billing)`
+              : "Free forever — upgrade when your band outgrows it"}
           </Text>
 
           <form onSubmit={handleSubmit}>
@@ -280,7 +318,7 @@ function RegisterForm() {
                 loading={loading}
                 mt={2}
               >
-                Create Account
+                {isPaidPlan ? "Create Account & Continue to Billing" : "Create Account"}
               </Button>
             </VStack>
           </form>
@@ -288,7 +326,7 @@ function RegisterForm() {
           <Text mt={6} fontSize="sm" textAlign="center" color="gray.400">
             Already have an account?{" "}
             <ChakraLink asChild color="blue.300" _hover={{ color: "blue.200" }}>
-              <NextLink href={callbackUrl !== "/dashboard" ? `/login?callbackUrl=${encodeURIComponent(callbackUrl)}` : "/login"}>Sign in</NextLink>
+              <NextLink href={isPaidPlan ? `/login?callbackUrl=${encodeURIComponent(`/pricing?plan=${plan}&interval=${interval}`)}` : callbackUrl !== "/dashboard" ? `/login?callbackUrl=${encodeURIComponent(callbackUrl)}` : "/login"}>Sign in</NextLink>
             </ChakraLink>
           </Text>
         </Box>
