@@ -27,12 +27,28 @@ interface BandSummary {
   _count: { songs: number };
 }
 
+interface UserProfile {
+  id: string;
+  tier: string;
+}
+
+const TIER_MAX_BANDS: Record<string, number> = {
+  free: 1,
+  band: 1,
+  agent: Infinity,
+};
+
 export default function DashboardPage() {
   const router = useRouter();
   const { data: bands, isLoading } = useApiQuery<BandSummary[]>(
     ["bands"],
     "/bands"
   );
+  const { data: user } = useApiQuery<UserProfile>(["me"], "/me");
+
+  const tier = user?.tier || "free";
+  const maxBands = TIER_MAX_BANDS[tier] ?? 1;
+  const canCreateBand = !bands || bands.length < maxBands;
 
   const [showCreate, setShowCreate] = useState(false);
   const [bandName, setBandName] = useState("");
@@ -65,7 +81,7 @@ export default function DashboardPage() {
           <Heading size="xl" color="gray.800">Dashboard</Heading>
           <Text color="gray.500" mt={1}>Manage your bands and rehearsals</Text>
         </Box>
-        {bands && bands.length > 0 && (
+        {bands && bands.length > 0 && canCreateBand && (
           <Button colorPalette="blue" onClick={() => setShowCreate(true)}>
             + New Band
           </Button>
