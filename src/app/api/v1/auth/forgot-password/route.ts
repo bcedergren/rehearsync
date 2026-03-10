@@ -35,7 +35,14 @@ export async function POST(req: NextRequest) {
         data: { identifier: email, token, expires },
       });
 
-      await sendPasswordResetEmail(email, token);
+      try {
+        await sendPasswordResetEmail(email, token);
+        console.log("Password reset email sent to:", email);
+      } catch (emailErr) {
+        console.error("Failed to send password reset email:", emailErr);
+      }
+    } else {
+      console.log("Forgot password: no eligible user for", email, "| user found:", !!user, "| has hash:", !!user?.passwordHash);
     }
 
     return response.ok({ sent: true });
