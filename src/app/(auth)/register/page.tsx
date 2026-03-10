@@ -13,6 +13,7 @@ import {
 } from "@chakra-ui/react";
 import Image from "next/image";
 import NextLink from "next/link";
+import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -50,7 +51,20 @@ export default function RegisterPage() {
       return;
     }
 
-    router.push("/login");
+    // Auto sign-in with the credentials they just created
+    const result = await signIn("credentials", {
+      email,
+      password,
+      redirect: false,
+    });
+
+    if (result?.error) {
+      // Registration succeeded but auto-login failed — fall back to login page
+      router.push("/login");
+      return;
+    }
+
+    router.push("/dashboard");
   }
 
   const PERKS = [

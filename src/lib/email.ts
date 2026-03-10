@@ -2,7 +2,7 @@ import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-const FROM = process.env.EMAIL_FROM || "RehearSync <noreply@rehearsync.com>";
+const FROM = process.env.EMAIL_FROM || "RehearSync <noreply@send.rehearsync.com>";
 const APP_URL = process.env.NEXTAUTH_URL || "http://localhost:3000";
 
 // ─── Welcome Email ──────────────────────────────────────────────

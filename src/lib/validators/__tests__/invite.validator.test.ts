@@ -57,4 +57,20 @@ describe("createInviteLinkSchema", () => {
       createInviteLinkSchema.parse({ expiresInHours: 1.5 })
     ).toThrow();
   });
+
+  it("accepts valid email", () => {
+    const result = createInviteLinkSchema.parse({ email: "test@example.com" });
+    expect(result.email).toBe("test@example.com");
+  });
+
+  it("accepts omitted email", () => {
+    const result = createInviteLinkSchema.parse({});
+    expect(result.email).toBeUndefined();
+  });
+
+  it("rejects invalid email", () => {
+    expect(() =>
+      createInviteLinkSchema.parse({ email: "not-an-email" })
+    ).toThrow();
+  });
 });

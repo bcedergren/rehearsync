@@ -4,14 +4,16 @@ Rehearsal management platform for bands. Organize songs, arrangements, parts, an
 
 ## Features
 
-- **Band Management** — Create bands, invite members, assign roles
+- **Band Management** — Create bands, invite members by email, assign roles
+- **Onboarding Wizard** — Post-signup setup flow: name your band, add members, assign instruments, send email invites
 - **Song & Arrangement Library** — Track songs with multiple arrangements, sections, and parts
 - **Sheet Music & Audio Assets** — Upload PDFs, MusicXML, and audio files with versioning
-- **AI Audio Processing** — Separate stems (Demucs), generate sheet music (OpenAI), auto-detect beats (Essentia) for sync maps
+- **AI Audio Processing** — Separate stems (Demucs), auto-detect beats (Essentia) for sync maps
 - **AI Section Analysis** — Automatically identify song sections (Intro, Verse, Chorus, etc.) from audio and sheet music using GPT-4o
 - **Audio Waveform Player** — Interactive waveform visualization (WaveSurfer.js) with color-coded tracks by role
 - **Score Sync Maps** — Map audio timestamps to bar numbers for synchronized playback
 - **Real-Time Rehearsal Sessions** — WebSocket-powered transport with synchronized state
+- **Email Notifications** — Welcome emails, password reset flow, and band invite emails via Resend
 - **Subscription Tiers** — Free, Band, and Agent tiers with Stripe billing
 
 ## Tech Stack
@@ -20,13 +22,14 @@ Rehearsal management platform for bands. Organize songs, arrangements, parts, an
 |-------|-----------|
 | Framework | Next.js (App Router) |
 | UI | Chakra UI v3, Framer Motion |
-| Auth | NextAuth.js v5 (Google OAuth) |
+| Auth | NextAuth.js v5 (Credentials + Google OAuth) |
 | Database | PostgreSQL via Prisma ORM |
 | Storage | Supabase Storage |
 | State | TanStack Query, Zustand |
 | Payments | Stripe |
 | AI/ML | Replicate (Demucs, Essentia), OpenAI (GPT-4o) |
 | Audio | WaveSurfer.js |
+| Email | Resend |
 | Hosting | Vercel + Supabase |
 
 ## Getting Started
@@ -65,8 +68,9 @@ See `.env.example` for the full list. Key variables:
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — Google OAuth
 - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` — Supabase
 - `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` — Stripe billing
+- `RESEND_API_KEY` / `EMAIL_FROM` — Transactional email (Resend)
 - `REPLICATE_API_TOKEN` / `REPLICATE_WEBHOOK_SECRET` — AI audio processing
-- `OPENAI_API_KEY` — Sheet music generation (MIDI → MusicXML)
+- `OPENAI_API_KEY` — AI section analysis and sheet music generation
 
 ## Project Structure
 
@@ -76,9 +80,10 @@ src/
 │   ├── (app)/              # Authenticated app routes
 │   │   ├── bands/          # Band management, songs, arrangements
 │   │   ├── dashboard/      # User dashboard
+│   │   ├── onboarding/     # Post-signup band setup wizard
 │   │   └── pricing/        # Subscription plans
 │   ├── api/v1/             # REST API routes
-│   └── (auth)/             # Login/register pages
+│   └── (auth)/             # Login, register, forgot/reset password
 ├── hooks/                  # React hooks (useApi, useProcessingJob, etc.)
 ├── lib/
 │   ├── api/                # API middleware, error handling, response helpers
