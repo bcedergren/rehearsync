@@ -223,7 +223,7 @@ function LoginForm() {
           <Text mt={6} fontSize="sm" textAlign="center" color="gray.400">
             No account?{" "}
             <ChakraLink asChild color="blue.300" _hover={{ color: "blue.200" }}>
-              <NextLink href="/register">Create one free</NextLink>
+              <NextLink href={callbackUrl !== "/dashboard" ? `/register?callbackUrl=${encodeURIComponent(callbackUrl)}` : "/register"}>Create one free</NextLink>
             </ChakraLink>
           </Text>
         </Box>

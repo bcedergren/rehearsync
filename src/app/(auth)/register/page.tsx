@@ -14,11 +14,21 @@ import {
 import Image from "next/image";
 import NextLink from "next/link";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 
 export default function RegisterPage() {
+  return (
+    <Suspense>
+      <RegisterForm />
+    </Suspense>
+  );
+}
+
+function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -64,7 +74,7 @@ export default function RegisterPage() {
       return;
     }
 
-    router.push("/dashboard");
+    router.push(callbackUrl);
   }
 
   const PERKS = [
@@ -278,7 +288,7 @@ export default function RegisterPage() {
           <Text mt={6} fontSize="sm" textAlign="center" color="gray.400">
             Already have an account?{" "}
             <ChakraLink asChild color="blue.300" _hover={{ color: "blue.200" }}>
-              <NextLink href="/login">Sign in</NextLink>
+              <NextLink href={callbackUrl !== "/dashboard" ? `/login?callbackUrl=${encodeURIComponent(callbackUrl)}` : "/login"}>Sign in</NextLink>
             </ChakraLink>
           </Text>
         </Box>
