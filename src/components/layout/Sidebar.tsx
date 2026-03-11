@@ -13,7 +13,11 @@ interface NavItem {
   icon: React.ReactNode;
 }
 
-export function Sidebar() {
+interface SidebarProps {
+  onNavigate?: () => void;
+}
+
+export function Sidebar({ onNavigate }: SidebarProps) {
   const params = useParams();
   const pathname = usePathname();
   const bandIdFromUrl = params.bandId as string | undefined;
@@ -91,6 +95,7 @@ export function Sidebar() {
                 textDecoration: "none",
               }}
               transition="all 0.15s"
+              onClick={onNavigate}
             >
               <NextLink href={item.href}>
                 <Flex align="center" gap={2.5}>

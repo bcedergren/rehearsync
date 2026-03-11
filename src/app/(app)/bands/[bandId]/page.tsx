@@ -108,9 +108,14 @@ export default function BandSongsPage() {
               borderColor="gray.100"
               onClick={() => router.push(`/bands/${bandId}/songs/${song.id}`)}
             >
-              <Card.Body px={6} py={4}>
-                <Flex justify="space-between" align="center">
-                  <Flex align="center" gap={4}>
+              <Card.Body px={{ base: 4, md: 6 }} py={4}>
+                <Flex
+                  justify="space-between"
+                  align={{ base: "start", md: "center" }}
+                  direction={{ base: "column", md: "row" }}
+                  gap={{ base: 2, md: 0 }}
+                >
+                  <Flex align="center" gap={{ base: 3, md: 4 }}>
                     <Box
                       w="36px"
                       h="36px"
@@ -131,7 +136,7 @@ export default function BandSongsPage() {
                       )}
                     </Box>
                   </Flex>
-                  <Flex gap={2} align="center">
+                  <Flex gap={2} align="center" wrap="wrap" ml={{ base: "48px", md: 0 }}>
                     {song.songKey && (
                       <Badge colorPalette="purple" variant="subtle">
                         {song.songKey}
@@ -150,7 +155,7 @@ export default function BandSongsPage() {
                     <Badge colorPalette="blue" variant="subtle">
                       {song._count.arrangements} {song._count.arrangements === 1 ? "arr." : "arr."}
                     </Badge>
-                    <Text color="gray.400" ml={2}>→</Text>
+                    <Text color="gray.400" ml={2} display={{ base: "none", md: "block" }}>→</Text>
                   </Flex>
                 </Flex>
               </Card.Body>

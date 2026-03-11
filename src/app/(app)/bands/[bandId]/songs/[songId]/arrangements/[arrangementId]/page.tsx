@@ -1244,7 +1244,13 @@ export default function ArrangementDetailPage() {
           ← Back to song
         </Button>
 
-        <Flex justify="space-between" align="center" mb={4}>
+        <Flex
+          justify="space-between"
+          align={{ base: "start", md: "center" }}
+          direction={{ base: "column", md: "row" }}
+          gap={{ base: 3, md: 0 }}
+          mb={4}
+        >
           <Box>
             {/* Song title — click to edit */}
             {editingSongTitle ? (
@@ -1274,7 +1280,7 @@ export default function ArrangementDetailPage() {
               </Text>
             )}
             {/* Arrangement name — click to edit */}
-            <Flex align="center" gap={3}>
+            <Flex align="center" gap={3} wrap="wrap">
               {editingArrName ? (
                 <Input
                   size="lg"
@@ -1288,7 +1294,7 @@ export default function ArrangementDetailPage() {
                 />
               ) : (
                 <Heading
-                  size="xl"
+                  size={{ base: "lg", md: "xl" }}
                   color="gray.800"
                   cursor="pointer"
                   _hover={{ color: "blue.600" }}
@@ -1487,7 +1493,7 @@ export default function ArrangementDetailPage() {
       {/* Main Content - Two Column Layout */}
       <Flex gap={6} direction={{ base: "column", lg: "row" }} alignItems="stretch">
         {/* Parts & Assignments */}
-        <Card.Root bg="white" borderWidth="1px" borderColor="gray.100" flex="0 0 auto" w={{ base: "100%", lg: "380px" }}>
+        <Card.Root bg="white" borderWidth="1px" borderColor="gray.100" flex={{ base: "1 1 auto", lg: "0 0 auto" }} w={{ base: "100%", lg: "380px" }}>
           <Card.Body p={5}>
             <Heading size="sm" color="gray.800" mb={4}>Parts & Assignments</Heading>
             {sortedParts.length === 0 ? (
@@ -1576,9 +1582,9 @@ export default function ArrangementDetailPage() {
         <Box flex="1 1 auto" minW={0} display="flex" flexDirection="column" gap={4}>
           <Card.Root bg="white" borderWidth="1px" borderColor="gray.100" display="flex" flexDirection="column">
             <Card.Body p={5} display="flex" flexDirection="column" flex={1}>
-              <Flex align="center" gap={2} mb={4}>
+              <Flex align="center" gap={2} mb={4} wrap="wrap">
                 <Heading size="sm" color="gray.800">Audio Tracks</Heading>
-                <Text fontSize="sm" color="gray.400" fontWeight="normal">— {arrangement.song.title}</Text>
+                <Text fontSize="sm" color="gray.400" fontWeight="normal" display={{ base: "none", sm: "block" }}>— {arrangement.song.title}</Text>
               </Flex>
               {arrangement.audioAssets.length === 0 ? (
                 <Flex direction="column" align="center" justify="center" p={8} bg="gray.50" borderRadius="lg" textAlign="center">

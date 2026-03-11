@@ -105,10 +105,18 @@ export default function MembersPage() {
     }
   }
 
+  const [revokingId, setRevokingId] = useState<string | null>(null);
   async function revokeLink(inviteId: string) {
-    await apiFetch(`/bands/${bandId}/invites/${inviteId}`, { method: "DELETE" });
-    refetchLinks();
-    if (inviteLinkUrl) setInviteLinkUrl("");
+    setRevokingId(inviteId);
+    try {
+      await apiFetch(`/bands/${bandId}/invites/${inviteId}`, { method: "DELETE" });
+      await refetchLinks();
+      if (inviteLinkUrl) setInviteLinkUrl("");
+    } catch {
+      await refetchLinks();
+    } finally {
+      setRevokingId(null);
+    }
   }
 
   const [editingMember, setEditingMember] = useState<Member | null>(null);
@@ -170,7 +178,13 @@ export default function MembersPage() {
       {/* Invite Link Card */}
       <Card.Root mb={6}>
         <Card.Body>
-          <Flex justify="space-between" align="center" mb={inviteLinkUrl || (inviteLinks && inviteLinks.length > 0) ? 3 : 0}>
+          <Flex
+            justify="space-between"
+            align={{ base: "start", sm: "center" }}
+            direction={{ base: "column", sm: "row" }}
+            gap={3}
+            mb={inviteLinkUrl || (inviteLinks && inviteLinks.length > 0) ? 3 : 0}
+          >
             <Box>
               <Heading size="sm">Invite Link</Heading>
               <Text fontSize="xs" color="gray.500">
@@ -183,6 +197,7 @@ export default function MembersPage() {
               variant="outline"
               loading={generatingLink}
               onClick={generateInviteLink}
+              flexShrink={0}
             >
               {linkCopied ? "Copied!" : "Generate Link"}
             </Button>
@@ -276,6 +291,7 @@ export default function MembersPage() {
                     variant="ghost"
                     colorPalette="red"
                     onClick={() => revokeLink(link.id)}
+                    loading={revokingId === link.id}
                   >
                     Revoke
                   </Button>
@@ -286,36 +302,73 @@ export default function MembersPage() {
         </Card.Body>
       </Card.Root>
 
+      {/* Desktop table */}
       {members && members.length > 0 && (
-        <Table.Root>
-          <Table.Header>
-            <Table.Row>
-              <Table.ColumnHeader>Name</Table.ColumnHeader>
-              <Table.ColumnHeader>Email</Table.ColumnHeader>
-              <Table.ColumnHeader>Role</Table.ColumnHeader>
-              <Table.ColumnHeader>Instrument</Table.ColumnHeader>
-            </Table.Row>
-          </Table.Header>
-          <Table.Body>
-            {members.map((m) => (
-              <Table.Row
-                key={m.id}
-                cursor="pointer"
-                _hover={{ bg: "gray.50" }}
-                onClick={() => openEdit(m)}
-              >
-                <Table.Cell>{m.displayName}</Table.Cell>
-                <Table.Cell>{m.email}</Table.Cell>
-                <Table.Cell>
+        <Box display={{ base: "none", md: "block" }}>
+          <Table.Root>
+            <Table.Header>
+              <Table.Row>
+                <Table.ColumnHeader>Name</Table.ColumnHeader>
+                <Table.ColumnHeader>Email</Table.ColumnHeader>
+                <Table.ColumnHeader>Role</Table.ColumnHeader>
+                <Table.ColumnHeader>Instrument</Table.ColumnHeader>
+              </Table.Row>
+            </Table.Header>
+            <Table.Body>
+              {members.map((m) => (
+                <Table.Row
+                  key={m.id}
+                  cursor="pointer"
+                  _hover={{ bg: "gray.50" }}
+                  onClick={() => openEdit(m)}
+                >
+                  <Table.Cell>{m.displayName}</Table.Cell>
+                  <Table.Cell>{m.email}</Table.Cell>
+                  <Table.Cell>
+                    <Badge colorPalette={roleColor[m.role] || "gray"}>
+                      {m.role}
+                    </Badge>
+                  </Table.Cell>
+                  <Table.Cell>{m.defaultInstrument || "—"}</Table.Cell>
+                </Table.Row>
+              ))}
+            </Table.Body>
+          </Table.Root>
+        </Box>
+      )}
+
+      {/* Mobile card list */}
+      {members && members.length > 0 && (
+        <VStack gap={3} display={{ base: "flex", md: "none" }}>
+          {members.map((m) => (
+            <Card.Root
+              key={m.id}
+              w="full"
+              cursor="pointer"
+              _hover={{ shadow: "md" }}
+              onClick={() => openEdit(m)}
+            >
+              <Card.Body p={4}>
+                <Flex justify="space-between" align="start" mb={2}>
+                  <Box>
+                    <Text fontWeight="semibold" fontSize="sm" color="gray.800">
+                      {m.displayName}
+                    </Text>
+                    <Text fontSize="xs" color="gray.500">{m.email}</Text>
+                  </Box>
                   <Badge colorPalette={roleColor[m.role] || "gray"}>
                     {m.role}
                   </Badge>
-                </Table.Cell>
-                <Table.Cell>{m.defaultInstrument || "—"}</Table.Cell>
-              </Table.Row>
-            ))}
-          </Table.Body>
-        </Table.Root>
+                </Flex>
+                {m.defaultInstrument && (
+                  <Text fontSize="xs" color="gray.500">
+                    {m.defaultInstrument}
+                  </Text>
+                )}
+              </Card.Body>
+            </Card.Root>
+          ))}
+        </VStack>
       )}
 
       <Dialog.Root open={showInvite} onOpenChange={(e) => setShowInvite(e.open)}>

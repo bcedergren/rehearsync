@@ -3,8 +3,13 @@
 import { Box, Flex, Text, Button, Dialog, CloseButton } from "@chakra-ui/react";
 import { signOut, useSession } from "next-auth/react";
 import { useState } from "react";
+import { Menu } from "lucide-react";
 
-export function Navbar() {
+interface NavbarProps {
+  onMenuToggle?: () => void;
+}
+
+export function Navbar({ onMenuToggle }: NavbarProps) {
   const { data: session } = useSession();
   const [showSignOut, setShowSignOut] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -23,15 +28,29 @@ export function Navbar() {
     <Flex
       as="header"
       h="60px"
-      px={8}
+      px={{ base: 4, md: 8 }}
       align="center"
       justify="space-between"
       borderBottom="1px solid"
       borderColor="gray.100"
       bg="white"
     >
-      <Box />
-      <Flex align="center" gap={4}>
+      {/* Mobile menu button */}
+      <Flex align="center" gap={3}>
+        <Button
+          variant="ghost"
+          size="sm"
+          display={{ base: "flex", md: "none" }}
+          onClick={onMenuToggle}
+          p={1}
+          minW="auto"
+        >
+          <Menu size={22} />
+        </Button>
+        <Box display={{ base: "none", md: "block" }} />
+      </Flex>
+
+      <Flex align="center" gap={{ base: 2, md: 4 }}>
         <Flex align="center" gap={2}>
           <Box
             w="32px"
@@ -47,7 +66,12 @@ export function Navbar() {
           >
             {(session?.user?.name?.[0] || session?.user?.email?.[0] || "?").toUpperCase()}
           </Box>
-          <Text fontSize="sm" fontWeight="medium" color="gray.700">
+          <Text
+            fontSize="sm"
+            fontWeight="medium"
+            color="gray.700"
+            display={{ base: "none", sm: "block" }}
+          >
             {session?.user?.name || session?.user?.email || ""}
           </Text>
         </Flex>

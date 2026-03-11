@@ -322,7 +322,7 @@ function OnboardingWizard() {
       {/* Step 1: Band Name */}
       {step === 0 && (
         <Card.Root>
-          <Card.Body p={8}>
+          <Card.Body p={{ base: 5, md: 8 }}>
             <Heading size="lg" mb={2} color="gray.800">
               {isEditMode ? "Update your band name" : "What's your band called?"}
             </Heading>
@@ -362,7 +362,7 @@ function OnboardingWizard() {
       {/* Step 2: Band Members */}
       {step === 1 && (
         <Card.Root>
-          <Card.Body p={8}>
+          <Card.Body p={{ base: 5, md: 8 }}>
             <Heading size="lg" mb={2} color="gray.800">
               Who's in the band?
             </Heading>
@@ -488,7 +488,7 @@ function OnboardingWizard() {
       {/* Step 3: Instruments */}
       {step === 2 && (
         <Card.Root>
-          <Card.Body p={8}>
+          <Card.Body p={{ base: 5, md: 8 }}>
             <Heading size="lg" mb={2} color="gray.800">
               What does everyone play?
             </Heading>
@@ -500,12 +500,12 @@ function OnboardingWizard() {
               {members
                 .filter((m) => m.name.trim())
                 .map((m) => (
-                  <Flex key={m.id} gap={3} w="full" align="center">
+                  <Flex key={m.id} gap={{ base: 2, sm: 3 }} w="full" align={{ base: "start", sm: "center" }} direction={{ base: "column", sm: "row" }}>
                     <Text
                       fontSize="sm"
                       fontWeight="medium"
                       color="gray.700"
-                      w="120px"
+                      w={{ base: "auto", sm: "120px" }}
                       flexShrink={0}
                       truncate
                     >
@@ -519,6 +519,7 @@ function OnboardingWizard() {
                       placeholder="e.g. Guitar, Drums, Vocals"
                       size="sm"
                       flex={1}
+                      w="full"
                     />
                   </Flex>
                 ))}
@@ -539,7 +540,7 @@ function OnboardingWizard() {
       {/* Step 4: Email Invites */}
       {step === 3 && (
         <Card.Root>
-          <Card.Body p={8}>
+          <Card.Body p={{ base: 5, md: 8 }}>
             <Heading size="lg" mb={2} color="gray.800">
               Invite your band members
             </Heading>
@@ -552,18 +553,18 @@ function OnboardingWizard() {
               {members
                 .filter((m) => m.name.trim() && !m.existingMemberId)
                 .map((m) => (
-                  <Flex key={m.id} gap={3} w="full" align="center">
+                  <Flex key={m.id} gap={{ base: 2, sm: 3 }} w="full" align={{ base: "start", sm: "center" }} direction={{ base: "column", sm: "row" }}>
                     <Text
                       fontSize="sm"
                       fontWeight="medium"
                       color="gray.700"
-                      w="120px"
+                      w={{ base: "auto", sm: "120px" }}
                       flexShrink={0}
                       truncate
                     >
                       {m.name}
                     </Text>
-                    <Flex align="center" gap={2} flex={1}>
+                    <Flex align="center" gap={2} flex={1} w="full">
                       <Mail size={14} color="var(--chakra-colors-gray-400)" />
                       <Input
                         type="email"
@@ -645,7 +646,7 @@ function OnboardingWizard() {
       {/* Step 5: Done */}
       {step === 4 && result && (
         <Card.Root>
-          <Card.Body p={8} textAlign="center">
+          <Card.Body p={{ base: 5, md: 8 }} textAlign="center">
             <Text fontSize="4xl" mb={4}>
               🎉
             </Text>

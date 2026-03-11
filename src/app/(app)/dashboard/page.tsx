@@ -405,10 +405,11 @@ export default function DashboardPage() {
                   {songs.map((song, i) => (
                     <Flex
                       key={song.id}
-                      align="center"
+                      align={{ base: "start", sm: "center" }}
+                      direction={{ base: "column", sm: "row" }}
                       py={2.5}
                       px={3}
-                      gap={3}
+                      gap={{ base: 1, sm: 3 }}
                       borderBottom={i < songs.length - 1 ? "1px solid" : "none"}
                       borderColor="gray.100"
                       cursor="pointer"
@@ -418,25 +419,32 @@ export default function DashboardPage() {
                     >
                       <Text fontSize="sm" fontWeight="medium" color="gray.800" flex={1}>
                         {song.title}
+                        {song.artist && (
+                          <Text as="span" fontSize="xs" color="gray.400" ml={2} display={{ base: "inline", sm: "none" }}>
+                            {song.artist}
+                          </Text>
+                        )}
                       </Text>
-                      {song.artist && (
-                        <Text fontSize="xs" color="gray.400">
-                          {song.artist}
-                        </Text>
-                      )}
-                      {song.songKey && (
-                        <Badge colorPalette="purple" variant="subtle" fontSize="xs">
-                          {song.songKey}
+                      <Flex gap={2} align="center" wrap="wrap">
+                        {song.artist && (
+                          <Text fontSize="xs" color="gray.400" display={{ base: "none", sm: "block" }}>
+                            {song.artist}
+                          </Text>
+                        )}
+                        {song.songKey && (
+                          <Badge colorPalette="purple" variant="subtle" fontSize="xs">
+                            {song.songKey}
+                          </Badge>
+                        )}
+                        {song.timeSignature && (
+                          <Badge colorPalette="orange" variant="subtle" fontSize="xs">
+                            {song.timeSignature}
+                          </Badge>
+                        )}
+                        <Badge colorPalette="gray" variant="subtle" fontSize="xs">
+                          {song._count.arrangements} arr.
                         </Badge>
-                      )}
-                      {song.timeSignature && (
-                        <Badge colorPalette="orange" variant="subtle" fontSize="xs">
-                          {song.timeSignature}
-                        </Badge>
-                      )}
-                      <Badge colorPalette="gray" variant="subtle" fontSize="xs">
-                        {song._count.arrangements} arr.
-                      </Badge>
+                      </Flex>
                     </Flex>
                   ))}
                 </VStack>
