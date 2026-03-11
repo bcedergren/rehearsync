@@ -28,6 +28,8 @@ interface AudioTrack {
 
 interface AudioPlayerProps {
   tracks: AudioTrack[];
+  /** Track IDs to solo by default on first render */
+  defaultSoloTrackIds?: string[];
   positionMs?: number;
   /** Set to [ms, counter] to force a seek — increment counter to re-seek to the same position */
   seekTo?: [number, number];
@@ -259,6 +261,7 @@ const TrackRow = memo(function TrackRow({
 
 export function AudioPlayer({
   tracks,
+  defaultSoloTrackIds,
   positionMs,
   seekTo,
   transportStatus,
@@ -283,7 +286,11 @@ export function AudioPlayer({
     setTrackStates((prev) => {
       const next: typeof prev = {};
       for (const t of tracks) {
-        next[t.id] = prev[t.id] || { muted: false, soloed: false, volume: 80 };
+        next[t.id] = prev[t.id] || {
+          muted: false,
+          soloed: defaultSoloTrackIds?.includes(t.id) || false,
+          volume: 80,
+        };
       }
       return next;
     });

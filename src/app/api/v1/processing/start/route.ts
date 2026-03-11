@@ -25,6 +25,11 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
   const { audioAssetId, jobType } = parsed.data;
 
+  // Block transcription jobs when the feature is disabled
+  if (jobType === "transcription" && process.env.NEXT_PUBLIC_TRANSCRIPTION_ENABLED !== "true") {
+    return response.error("feature_disabled", "Transcription is currently unavailable. The AI model is being updated.", 503);
+  }
+
   // Validate the audio asset exists and get its storage info
   const audioAsset = await prisma.audioAsset.findUnique({
     where: { id: audioAssetId },

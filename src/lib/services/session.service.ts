@@ -162,6 +162,23 @@ export async function getMusicianView(sessionId: string, memberId: string) {
     include: { storageObject: true },
   });
 
+  // Filter audio to full_mix + the musician's matched stem
+  const filteredAudio = assignment
+    ? audioAssets.filter((a) => {
+        if (a.assetRole === "full_mix") return true;
+        if (a.assetRole === "stem" && a.stemName) {
+          const stem = a.stemName.toLowerCase();
+          const inst = assignment.part.instrumentName.toLowerCase();
+          return inst.includes(stem) || stem.includes(inst);
+        }
+        return false;
+      })
+    : audioAssets;
+
+  const myStem = filteredAudio.find(
+    (a) => a.assetRole === "stem" && a.stemName
+  );
+
   const activeSyncMap = await prisma.syncMap.findFirst({
     where: {
       arrangementId: session.arrangementId,
@@ -196,7 +213,8 @@ export async function getMusicianView(sessionId: string, memberId: string) {
         }
       : null,
     sheetMusic,
-    audio: audioAssets,
+    audio: filteredAudio,
+    myStemTrackId: myStem?.id || null,
     syncMap: activeSyncMap,
     sections: sectionMarkers,
   };

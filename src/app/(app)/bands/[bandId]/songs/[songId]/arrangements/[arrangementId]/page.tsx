@@ -357,18 +357,27 @@ export default function ArrangementDetailPage() {
     resumeJob: resumeTranscription,
   } = useProcessingJob(handleProcessingComplete);
 
+  // Feature flag for transcription (disabled when AI model is unavailable)
+  const transcriptionEnabled = process.env.NEXT_PUBLIC_TRANSCRIPTION_ENABLED === "true";
+
   // Resume tracking any in-progress processing jobs on page load
   interface ActiveJob { id: string; jobType: string; status: string }
   const { data: activeJobs } = useApiQuery<ActiveJob[]>(
     ["active-jobs", arrangementId],
-    `/arrangements/${arrangementId}/processing-jobs`
+    `/arrangements/${arrangementId}/processing-jobs?includeFailed=true`
   );
+
+  // Check if transcription has already failed for this arrangement (guard against re-triggering)
+  const hasFailedTranscription = activeJobs?.some(
+    (j) => j.jobType === "transcription" && j.status === "failed"
+  ) ?? false;
 
   const resumedRef = useRef(false);
   useEffect(() => {
     if (!activeJobs || activeJobs.length === 0 || resumedRef.current) return;
     resumedRef.current = true;
-    for (const job of activeJobs) {
+    const runnableJobs = activeJobs.filter((j) => j.status === "pending" || j.status === "running");
+    for (const job of runnableJobs) {
       if (job.jobType === "stem_separation") resumeStemSeparation(job.id, job.jobType);
       if (job.jobType === "beat_detection") resumeBeatDetection(job.id, job.jobType);
       if (job.jobType === "transcription") resumeTranscription(job.id, job.jobType);
@@ -977,9 +986,12 @@ export default function ArrangementDetailPage() {
   }
 
   // Auto-trigger transcription when stems have matching parts without charts
+  // Guarded by: feature flag, failed job check, and single-execution ref
   const autoTranscriptionRef = useRef(false);
   useEffect(() => {
     if (
+      !transcriptionEnabled ||
+      hasFailedTranscription ||
       stemsForTranscription.length === 0 ||
       isTranscribing ||
       autoTranscriptionRef.current
@@ -994,7 +1006,7 @@ export default function ArrangementDetailPage() {
     }
     autoTranscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stemsForTranscription, isTranscribing]);
+  }, [stemsForTranscription, isTranscribing, transcriptionEnabled, hasFailedTranscription]);
 
   if (isLoading || !arrangement) {
     return (
@@ -1121,7 +1133,7 @@ export default function ArrangementDetailPage() {
   }
 
   function renderChartsStepExtra() {
-    const showTranscribe = stemsForTranscription.length > 0 && !isTranscribing && !transcriptionError;
+    const showTranscribe = transcriptionEnabled && stemsForTranscription.length > 0 && !isTranscribing && !transcriptionError;
     return (
       <VStack align="stretch" gap={2}>
         {showTranscribe && (
@@ -1140,7 +1152,7 @@ export default function ArrangementDetailPage() {
             </Button>
           </Flex>
         )}
-        {hasCharts && stemsWithCharts.length > 0 && !isTranscribing && !isRegenerating && (
+        {transcriptionEnabled && hasCharts && stemsWithCharts.length > 0 && !isTranscribing && !isRegenerating && (
           <Flex align="center" gap={2} p={3} borderRadius="md" bg="gray.50" border="1px solid" borderColor="gray.200">
             <Box flex={1}>
               <Text fontWeight="medium" fontSize="xs" color="gray.700">Regenerate Charts</Text>
