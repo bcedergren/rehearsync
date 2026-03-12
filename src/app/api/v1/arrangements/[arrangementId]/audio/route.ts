@@ -3,7 +3,7 @@ import { withAuth } from "@/lib/api/middleware";
 import * as response from "@/lib/api/response";
 import { createAudioAssetSchema } from "@/lib/validators/upload";
 import * as audioService from "@/lib/services/audio.service";
-import { requireFeature } from "@/lib/subscriptions/guards";
+import { requireFeature, checkFreeTierLock } from "@/lib/subscriptions/guards";
 
 export const GET = withAuth(async (_req, _ctx, params) => {
   const assets = await audioService.listAudioAssets(params.arrangementId);
@@ -12,6 +12,7 @@ export const GET = withAuth(async (_req, _ctx, params) => {
 
 export const POST = withAuth(async (req: NextRequest, ctx, params) => {
   await requireFeature(ctx.userId, "allowAudioUploads");
+  await checkFreeTierLock(ctx.userId, { arrangementId: params.arrangementId });
 
   const body = await req.json();
   const parsed = createAudioAssetSchema.safeParse(body);

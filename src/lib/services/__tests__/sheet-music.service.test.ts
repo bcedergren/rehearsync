@@ -62,7 +62,8 @@ describe("activateSheetMusicAsset", () => {
     db.$transaction.mockResolvedValue([]);
 
     const result = await activateSheetMusicAsset("sma-1");
-    expect(result.isActive).toBe(true);
+    expect(result).not.toBeNull();
+    expect(result!.isActive).toBe(true);
     expect(db.$transaction).toHaveBeenCalled();
   });
 

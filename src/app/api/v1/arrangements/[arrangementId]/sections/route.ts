@@ -3,7 +3,7 @@ import { withAuth } from "@/lib/api/middleware";
 import * as response from "@/lib/api/response";
 import { createSectionMarkerSchema } from "@/lib/validators/session";
 import * as sectionService from "@/lib/services/section.service";
-import { requireFeature } from "@/lib/subscriptions/guards";
+import { requireFeature, checkFreeTierLock } from "@/lib/subscriptions/guards";
 
 export const GET = withAuth(async (_req, _ctx, params) => {
   const markers = await sectionService.listSectionMarkers(params.arrangementId);
@@ -12,6 +12,7 @@ export const GET = withAuth(async (_req, _ctx, params) => {
 
 export const POST = withAuth(async (req: NextRequest, ctx, params) => {
   await requireFeature(ctx.userId, "allowSectionMarkers");
+  await checkFreeTierLock(ctx.userId, { arrangementId: params.arrangementId });
 
   const body = await req.json();
   const parsed = createSectionMarkerSchema.safeParse(body);

@@ -151,21 +151,19 @@ export default function HomePage() {
             mb={5}
             color="white"
           >
-            Stop fumbling with charts.
-            <br />
-            Start rehearsing.
+            Run rehearsals where every musician stays in sync.
           </Heading>
           <Text
             fontSize={{ base: "md", md: "lg" }}
             color="whiteAlpha.900"
             mb={8}
             lineHeight="1.7"
-            maxW="600px"
+            maxW="620px"
           >
-            RehearsSync keeps your sheet music, audio tracks, and part
-            assignments in one place — with AI that splits stems, detects tempo,
-            and maps out song sections for you. When rehearsal starts, every
-            screen stays in sync.
+            Control rehearsal flow from one device. Jump to any section and
+            every musician&apos;s screen follows — sheet music, audio, and cues
+            update instantly. AI splits stems, detects tempo, and maps out
+            sections so you can focus on the music.
           </Text>
           <Flex gap={4} flexWrap="wrap" justify="center">
             <Button size="lg" colorPalette="blue" px={8} asChild>
@@ -185,39 +183,68 @@ export default function HomePage() {
         </Flex>
       </Box>
 
-      {/* The Problem — conversational, left-aligned with accent border */}
+      {/* Before / After contrast */}
       <Box as="section" py={{ base: 14, md: 20 }} px={6}>
-        <Box maxW="720px" mx="auto">
+        <Box maxW="800px" mx="auto">
           <Text
             fontSize="xs"
             fontWeight="bold"
             textTransform="uppercase"
             letterSpacing="wider"
             color="blue.500"
-            mb={4}
+            mb={8}
+            textAlign="center"
           >
             Sound familiar?
           </Text>
-          <Text
-            fontSize={{ base: "lg", md: "xl" }}
-            color="gray.800"
-            lineHeight="1.9"
-            borderLeft="3px solid"
-            borderColor="blue.400"
-            pl={5}
-            mb={8}
-            fontStyle="italic"
-          >
-            &ldquo;Who has the updated chart?&rdquo; &bull;
-            &ldquo;The click track is on my other phone.&rdquo; &bull;
-            &ldquo;Wait, are we doing the new bridge or the old one?&rdquo;
-          </Text>
-          <Text fontSize={{ base: "md", md: "lg" }} color="gray.600" lineHeight="1.8">
-            Every band deals with this. Scattered files, outdated versions,
-            and that five-minute scramble at the start of every rehearsal.
-            RehearsSync puts your charts, audio, and assignments in one place
-            so you can skip the confusion and just play.
-          </Text>
+          <SimpleGrid columns={{ base: 1, md: 2 }} gap={6}>
+            <Box
+              bg="red.50"
+              borderRadius="xl"
+              p={6}
+              borderLeft="4px solid"
+              borderColor="red.400"
+            >
+              <Text fontWeight="bold" color="red.600" mb={3} fontSize="sm" textTransform="uppercase">
+                Before RehearSync
+              </Text>
+              <VStack align="start" gap={2}>
+                {[
+                  "\u201CWho has the updated chart?\u201D",
+                  "\u201CMeasure 52? I\u2019m still on the last page.\u201D",
+                  "\u201CThe click track is on my other phone.\u201D",
+                  "\u201CWait, are we doing the new bridge or the old one?\u201D",
+                ].map((quote) => (
+                  <Text key={quote} fontSize="md" color="gray.700" fontStyle="italic" lineHeight="1.6">
+                    {quote}
+                  </Text>
+                ))}
+              </VStack>
+            </Box>
+            <Box
+              bg="green.50"
+              borderRadius="xl"
+              p={6}
+              borderLeft="4px solid"
+              borderColor="green.400"
+            >
+              <Text fontWeight="bold" color="green.600" mb={3} fontSize="sm" textTransform="uppercase">
+                After RehearSync
+              </Text>
+              <VStack align="start" gap={2}>
+                {[
+                  "Director jumps to the bridge.",
+                  "Every screen scrolls to the right bar.",
+                  "The correct stem is already soloed.",
+                  "Everyone plays. No confusion.",
+                ].map((line) => (
+                  <Text key={line} fontSize="md" color="gray.700" lineHeight="1.6">
+                    {line}
+                  </Text>
+                ))}
+              </VStack>
+            </Box>
+          </SimpleGrid>
         </Box>
       </Box>
 
@@ -282,6 +309,50 @@ export default function HomePage() {
                 </Heading>
                 <Text fontSize="sm" color="gray.400" lineHeight="1.8">
                   {item.desc}
+                </Text>
+              </VStack>
+            ))}
+          </SimpleGrid>
+        </Box>
+      </Box>
+
+      {/* Perfect for — target audience */}
+      <Box as="section" py={{ base: 10, md: 14 }} px={6} bg="gray.50">
+        <Box maxW="900px" mx="auto" textAlign="center">
+          <Text
+            fontSize="xs"
+            fontWeight="bold"
+            textTransform="uppercase"
+            letterSpacing="wider"
+            color="blue.500"
+            mb={3}
+          >
+            Built for groups that rehearse
+          </Text>
+          <Heading size={{ base: "lg", md: "xl" }} mb={10} color="gray.900">
+            Perfect for
+          </Heading>
+          <SimpleGrid columns={{ base: 2, md: 4 }} gap={6}>
+            {[
+              { label: "Worship Teams", icon: <Music size={28} /> },
+              { label: "Bands", icon: <Headphones size={28} /> },
+              { label: "Orchestras", icon: <AudioWaveform size={28} /> },
+              { label: "Theater Pits", icon: <Radio size={28} /> },
+            ].map((item) => (
+              <VStack key={item.label} gap={3}>
+                <Flex
+                  w="60px"
+                  h="60px"
+                  borderRadius="full"
+                  bg="blue.50"
+                  color="blue.500"
+                  align="center"
+                  justify="center"
+                >
+                  {item.icon}
+                </Flex>
+                <Text fontWeight="semibold" color="gray.700" fontSize="md">
+                  {item.label}
                 </Text>
               </VStack>
             ))}
@@ -407,11 +478,26 @@ export default function HomePage() {
           <Heading size={{ base: "lg", md: "xl" }} mb={3} fontWeight="semibold">
             Built by musicians, powered by AI.
           </Heading>
-          <Text fontSize={{ base: "md", md: "lg" }} color="blue.100" lineHeight="1.7">
+          <Text fontSize={{ base: "md", md: "lg" }} color="blue.100" lineHeight="1.7" mb={8}>
             We got tired of texting PDF charts in group chats, manually splitting stems,
             and arguing about which version of the bridge we&apos;re playing.
             So we built the tool we wished existed — and let AI handle the tedious parts.
           </Text>
+          <Box
+            bg="blue.700"
+            borderRadius="xl"
+            p={6}
+            maxW="520px"
+            mx="auto"
+          >
+            <Text fontSize="md" fontStyle="italic" color="white" lineHeight="1.7" mb={3}>
+              &ldquo;We used to burn 10 minutes every rehearsal just getting everyone on the same page.
+              Now the director hits play and we&apos;re all there.&rdquo;
+            </Text>
+            <Text fontSize="sm" color="blue.200" fontWeight="semibold">
+              — Worship team leader, early beta user
+            </Text>
+          </Box>
         </Box>
       </Box>
 

@@ -175,9 +175,9 @@ export async function getMusicianView(sessionId: string, memberId: string) {
       })
     : audioAssets;
 
-  const myStem = filteredAudio.find(
-    (a) => a.assetRole === "stem" && a.stemName
-  );
+  const myStem = assignment
+    ? filteredAudio.find((a) => a.assetRole === "stem" && a.stemName)
+    : null;
 
   const activeSyncMap = await prisma.syncMap.findFirst({
     where: {

@@ -1,12 +1,13 @@
 import { NextRequest } from "next/server";
 import { withAuth } from "@/lib/api/middleware";
 import * as response from "@/lib/api/response";
-import { requireFeature } from "@/lib/subscriptions/guards";
+import { requireFeature, checkFreeTierLock } from "@/lib/subscriptions/guards";
 import { prisma } from "@/lib/prisma";
 import { createSignedDownloadUrl } from "@/lib/supabase-storage";
 
 export const POST = withAuth(async (_req: NextRequest, ctx, params) => {
   await requireFeature(ctx.userId, "allowSectionMarkers");
+  await checkFreeTierLock(ctx.userId, { arrangementId: params.arrangementId });
 
   const arrangementId = params.arrangementId;
 

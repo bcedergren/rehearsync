@@ -3,7 +3,7 @@ import { withAuth } from "@/lib/api/middleware";
 import * as response from "@/lib/api/response";
 import * as uploadService from "@/lib/services/upload.service";
 import { prisma } from "@/lib/prisma";
-import { requireFeature } from "@/lib/subscriptions/guards";
+import { requireFeature, checkAudioUploadLimit } from "@/lib/subscriptions/guards";
 
 
 export const POST = withAuth(async (req: NextRequest, ctx) => {
@@ -20,9 +20,10 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     return response.validationError("kind must be 'sheet_music' or 'audio'");
   }
 
-  // Gate audio uploads to Band+ tier
+  // Gate audio uploads by tier feature + upload count limit
   if (kind === "audio") {
     await requireFeature(ctx.userId, "allowAudioUploads");
+    await checkAudioUploadLimit(ctx.userId);
   }
 
   // Gate MusicXML uploads to Band+ tier (check file extension)

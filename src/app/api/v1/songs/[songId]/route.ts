@@ -3,13 +3,15 @@ import { withAuth } from "@/lib/api/middleware";
 import * as response from "@/lib/api/response";
 import { updateSongSchema } from "@/lib/validators/song";
 import * as songService from "@/lib/services/song.service";
+import { checkFreeTierLock } from "@/lib/subscriptions/guards";
 
 export const GET = withAuth(async (_req, _ctx, params) => {
   const song = await songService.getSong(params.songId);
   return response.ok(song);
 });
 
-export const PATCH = withAuth(async (req: NextRequest, _ctx, params) => {
+export const PATCH = withAuth(async (req: NextRequest, ctx, params) => {
+  await checkFreeTierLock(ctx.userId, { songId: params.songId });
   const body = await req.json();
   const parsed = updateSongSchema.safeParse(body);
   if (!parsed.success) {

@@ -98,7 +98,8 @@ describe("activateSyncMap", () => {
     db.$transaction.mockResolvedValue([]);
 
     const result = await activateSyncMap("syncmap-1");
-    expect(result.isActive).toBe(true);
+    expect(result).not.toBeNull();
+    expect(result!.isActive).toBe(true);
   });
 
   it("throws NotFoundError for missing sync map", async () => {

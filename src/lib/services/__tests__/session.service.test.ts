@@ -148,7 +148,7 @@ describe("endSession", () => {
 });
 
 describe("getMusicianView", () => {
-  it("returns full musician view data", async () => {
+  it("returns full musician view data with filtered audio", async () => {
     db.rehearsalSession.findUnique.mockResolvedValue({
       id: "sess-1",
       state: "live",
@@ -160,27 +160,39 @@ describe("getMusicianView", () => {
       part: { instrumentName: "Guitar", partName: "Lead" },
     });
     db.sheetMusicAsset.findFirst.mockResolvedValue({ id: "sma-1" });
-    db.audioAsset.findMany.mockResolvedValue([{ id: "aa-1" }]);
+    db.audioAsset.findMany.mockResolvedValue([
+      { id: "aa-fm", assetRole: "full_mix", stemName: null },
+      { id: "aa-guitar", assetRole: "stem", stemName: "guitar" },
+      { id: "aa-drums", assetRole: "stem", stemName: "drums" },
+      { id: "aa-bass", assetRole: "stem", stemName: "bass" },
+    ]);
     db.syncMap.findFirst.mockResolvedValue(null);
     db.sectionMarker.findMany.mockResolvedValue([
       { id: "sm-1", name: "Intro" },
     ]);
+    db.member.findUnique.mockResolvedValue({
+      id: "m-1",
+      displayName: "Alice",
+    });
 
     const result = await getMusicianView("sess-1", "m-1");
 
     expect(result.session.id).toBe("sess-1");
-    expect(result.transport.status).toBe("playing");
+    expect(result.transport!.status).toBe("playing");
     expect(result.assignment).toEqual({
       partId: "part-1",
       instrumentName: "Guitar",
       partName: "Lead",
     });
     expect(result.sheetMusic).toBeDefined();
-    expect(result.audio).toHaveLength(1);
+    // Only full_mix + matching guitar stem (not drums/bass)
+    expect(result.audio).toHaveLength(2);
+    expect(result.audio.map((a: any) => a.id)).toEqual(["aa-fm", "aa-guitar"]);
+    expect(result.myStemTrackId).toBe("aa-guitar");
     expect(result.sections).toHaveLength(1);
   });
 
-  it("returns null assignment when member has no assignment", async () => {
+  it("returns null assignment and all audio when member has no assignment", async () => {
     db.rehearsalSession.findUnique.mockResolvedValue({
       id: "sess-1",
       state: "live",
@@ -188,13 +200,23 @@ describe("getMusicianView", () => {
       transportState: { status: "stopped" },
     });
     db.arrangementMemberAssignment.findUnique.mockResolvedValue(null);
-    db.audioAsset.findMany.mockResolvedValue([]);
+    db.audioAsset.findMany.mockResolvedValue([
+      { id: "aa-1", assetRole: "full_mix", stemName: null },
+      { id: "aa-2", assetRole: "stem", stemName: "vocals" },
+    ]);
     db.syncMap.findFirst.mockResolvedValue(null);
     db.sectionMarker.findMany.mockResolvedValue([]);
+    db.member.findUnique.mockResolvedValue({
+      id: "m-2",
+      displayName: "Bob",
+    });
 
     const result = await getMusicianView("sess-1", "m-2");
     expect(result.assignment).toBeNull();
     expect(result.sheetMusic).toBeNull();
+    // No assignment = all audio returned (fallback)
+    expect(result.audio).toHaveLength(2);
+    expect(result.myStemTrackId).toBeNull();
   });
 
   it("throws NotFoundError for missing session", async () => {

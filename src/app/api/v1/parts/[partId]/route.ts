@@ -3,8 +3,10 @@ import { withAuth } from "@/lib/api/middleware";
 import * as response from "@/lib/api/response";
 import { updatePartSchema } from "@/lib/validators/part";
 import * as partService from "@/lib/services/part.service";
+import { checkFreeTierLock } from "@/lib/subscriptions/guards";
 
-export const PATCH = withAuth(async (req: NextRequest, _ctx, params) => {
+export const PATCH = withAuth(async (req: NextRequest, ctx, params) => {
+  await checkFreeTierLock(ctx.userId, { partId: params.partId });
   const body = await req.json();
   const parsed = updatePartSchema.safeParse(body);
   if (!parsed.success) {
@@ -17,7 +19,8 @@ export const PATCH = withAuth(async (req: NextRequest, _ctx, params) => {
   return response.ok(part);
 });
 
-export const DELETE = withAuth(async (_req, _ctx, params) => {
+export const DELETE = withAuth(async (_req, ctx, params) => {
+  await checkFreeTierLock(ctx.userId, { partId: params.partId });
   await partService.deletePart(params.partId);
   return response.ok({ deleted: true });
 });

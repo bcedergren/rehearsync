@@ -66,7 +66,8 @@ describe("activateAudioAsset", () => {
     db.$transaction.mockResolvedValue([]);
 
     const result = await activateAudioAsset("aa-1");
-    expect(result.isActive).toBe(true);
+    expect(result).not.toBeNull();
+    expect(result!.isActive).toBe(true);
   });
 
   it("throws NotFoundError for missing asset", async () => {

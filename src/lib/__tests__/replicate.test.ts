@@ -29,7 +29,7 @@ describe("MODELS", () => {
   });
 
   it("has BASIC_PITCH model with version hash", () => {
-    expect(MODELS.BASIC_PITCH).toContain("rhelsing/basic-pitch:");
+    expect(MODELS.BASIC_PITCH).toContain("rehearsync/basic-pitch:");
     expect(MODELS.BASIC_PITCH.split(":")[1]).toHaveLength(64);
   });
 

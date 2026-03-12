@@ -88,6 +88,99 @@ export async function checkArrangementLimit(songId: string, userId: string): Pro
   }
 }
 
+export async function checkAudioUploadLimit(userId: string): Promise<void> {
+  const tier = await getUserTier(userId);
+  const limits = getTierLimits(tier);
+
+  if (limits.maxAudioUploads === Infinity) return;
+
+  // Count active full-mix audio across all the user's bands
+  const count = await prisma.audioAsset.count({
+    where: {
+      assetRole: "full_mix",
+      isActive: true,
+      arrangement: {
+        song: {
+          band: {
+            members: {
+              some: { userId, isActive: true },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (count >= limits.maxAudioUploads) {
+    throw new TierLimitError(
+      `Your ${tier} plan allows up to ${limits.maxAudioUploads} audio upload(s). Upgrade to upload more.`,
+      "band"
+    );
+  }
+}
+
+/**
+ * Blocks mutations for free-tier users once a full_mix audio upload exists
+ * anywhere on their account. The scope parameter is accepted for API
+ * compatibility but the check is account-wide.
+ */
+export async function checkFreeTierLock(
+  userId: string,
+  _scope:
+    | { songId: string }
+    | { arrangementId: string }
+    | { partId: string }
+    | { sectionMarkerId: string }
+    | { syncMapId: string }
+): Promise<void> {
+  const tier = await getUserTier(userId);
+  if (tier !== "free") return;
+
+  const userBandFilter = {
+    song: {
+      band: {
+        members: {
+          some: { userId, isActive: true },
+        },
+      },
+    },
+  };
+
+  // Account-wide check: any active full_mix audio across all the user's bands
+  const hasAudio = await prisma.audioAsset.count({
+    where: {
+      assetRole: "full_mix",
+      isActive: true,
+      arrangement: userBandFilter,
+    },
+  });
+
+  if (hasAudio === 0) return;
+
+  // Allow mutations while processing is in progress or recently finished (setup phase).
+  // This covers the post-processing window where section generation and
+  // assignment review still need to run from the frontend.
+  const SETUP_GRACE_MS = 10 * 60 * 1000; // 10 minutes
+  const graceThreshold = new Date(Date.now() - SETUP_GRACE_MS);
+
+  const recentOrActiveJobs = await prisma.processingJob.count({
+    where: {
+      arrangement: userBandFilter,
+      OR: [
+        { status: { in: ["pending", "running"] } },
+        { status: "completed", completedAt: { gte: graceThreshold } },
+      ],
+    },
+  });
+
+  if (recentOrActiveJobs > 0) return;
+
+  throw new TierLimitError(
+    "Free plan songs are locked after audio upload. Upgrade to the Band plan to make changes.",
+    "band"
+  );
+}
+
 export async function requireFeature(
   userId: string,
   feature: keyof Pick<
