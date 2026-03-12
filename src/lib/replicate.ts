@@ -55,12 +55,13 @@ export async function createStemSeparationPrediction(audioUrl: string) {
   );
 }
 
-export async function createTranscriptionPrediction(audioUrl: string) {
+export async function createTranscriptionPrediction(audioUrl: string, stemName?: string) {
   return withRetry(() =>
     replicate.predictions.create({
       version: MODELS.BASIC_PITCH.split(":")[1],
       input: {
         audio_file: audioUrl,
+        ...(stemName ? { stem_name: stemName } : {}),
       },
       webhook: getWebhookUrl(),
       webhook_events_filter: ["completed"],

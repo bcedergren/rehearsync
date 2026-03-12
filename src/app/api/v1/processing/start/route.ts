@@ -84,7 +84,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         prediction = await createStemSeparationPrediction(audioUrl);
         break;
       case "transcription":
-        prediction = await createTranscriptionPrediction(audioUrl);
+        prediction = await createTranscriptionPrediction(audioUrl, audioAsset.stemName ?? undefined);
         break;
       case "beat_detection":
         prediction = await createBeatDetectionPrediction(audioUrl);
