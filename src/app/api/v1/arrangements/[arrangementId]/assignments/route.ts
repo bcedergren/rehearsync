@@ -3,15 +3,15 @@ import { withAuth } from "@/lib/api/middleware";
 import * as response from "@/lib/api/response";
 import { assignmentSchema } from "@/lib/validators/session";
 import * as assignmentService from "@/lib/services/assignment.service";
-import { checkFreeTierLock } from "@/lib/subscriptions/guards";
 
 export const GET = withAuth(async (_req, _ctx, params) => {
   const assignments = await assignmentService.listAssignments(params.arrangementId);
   return response.ok(assignments);
 });
 
-export const POST = withAuth(async (req: NextRequest, ctx, params) => {
-  await checkFreeTierLock(ctx.userId, { arrangementId: params.arrangementId });
+// Assignments are part of the automated post-upload setup flow,
+// so POST is NOT gated by checkFreeTierLock.
+export const POST = withAuth(async (req: NextRequest, _ctx, params) => {
   const body = await req.json();
   const parsed = assignmentSchema.safeParse(body);
   if (!parsed.success) {

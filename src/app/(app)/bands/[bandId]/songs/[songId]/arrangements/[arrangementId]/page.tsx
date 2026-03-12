@@ -2337,11 +2337,11 @@ export default function ArrangementDetailPage() {
       </Dialog.Root>
       {/* Floating processing toast stack */}
       {(() => {
-        const toasts: { key: string; isProcessing: boolean; error: string | null; label: string; hint: string; errorLabel: string; onRetry?: () => void; pct?: number | null; pctMsg?: string | null }[] = [
+        const toasts: { key: string; isProcessing: boolean; error: string | null; label: string; hint: string; errorLabel: string; onRetry?: () => void; onDismiss?: () => void; pct?: number | null; pctMsg?: string | null }[] = [
           { key: "stems", isProcessing: isStemProcessing, error: stemProcessingError, label: "Separating stems...", hint: "Usually takes 1-3 minutes.", errorLabel: "Stem separation failed", onRetry: fullMix ? () => startStemSeparation(fullMix.id, "stem_separation") : undefined, pct: stemProgress, pctMsg: stemProgressLabel },
           { key: "transcription", isProcessing: isTranscribing || isRegenerating, error: transcriptionError, label: "Transcribing audio to sheet music...", hint: "May take 2-5 minutes.", errorLabel: "Transcription failed", pct: transcriptionProgress, pctMsg: transcriptionProgressLabel },
           { key: "beats", isProcessing: isBeatProcessing, error: beatProcessingError, label: "Generating sync map...", hint: "Usually under a minute.", errorLabel: "Beat detection failed", onRetry: fullMix ? () => startBeatDetection(fullMix.id, "beat_detection") : undefined, pct: beatProgress, pctMsg: beatProgressLabel },
-          { key: "sections", isProcessing: isGeneratingSections, error: sectionGenError, label: "Analyzing song structure...", hint: "AI is identifying sections.", errorLabel: "Section generation failed", onRetry: handleGenerateSections },
+          { key: "sections", isProcessing: isGeneratingSections, error: sectionGenError, label: "Analyzing song structure...", hint: "AI is identifying sections.", errorLabel: "Section generation failed", onRetry: handleGenerateSections, onDismiss: () => setSectionGenError(null) },
         ];
         const active = toasts.filter((t) => t.isProcessing || t.error);
         if (active.length === 0) return null;
@@ -2393,6 +2393,9 @@ export default function ArrangementDetailPage() {
                     </Box>
                     {t.onRetry && (
                       <Button size="xs" variant="outline" colorPalette="red" onClick={t.onRetry}>Retry</Button>
+                    )}
+                    {t.onDismiss && (
+                      <CloseButton size="xs" onClick={t.onDismiss} />
                     )}
                   </Flex>
                 </Box>
