@@ -728,6 +728,25 @@ export default function ArrangementDetailPage() {
     return closest?.timeMs ?? null;
   }, [syncPoints]);
 
+  // Memoize audio tracks to prevent unnecessary AudioPlayer re-renders
+  const audioTracks = useMemo(() => {
+    if (!arrangement) return [];
+    const all = arrangement.audioAssets.map((a) => ({
+      id: a.id,
+      url: a.storageObject.objectKey,
+      label: a.stemName || a.assetRole.replace("_", " "),
+      role: a.assetRole,
+    }));
+    const hasStems = all.some((t) => t.role === "stem");
+    const filtered = hasStems ? all.filter((t) => t.role !== "full_mix") : all;
+    return filtered.sort((a, b) => {
+      const aIsOther = a.label.toLowerCase() === "other";
+      const bIsOther = b.label.toLowerCase() === "other";
+      if (aIsOther !== bIsOther) return aIsOther ? 1 : -1;
+      return a.label.localeCompare(b.label);
+    });
+  }, [arrangement?.audioAssets]);
+
   // State for seeking audio player to a section
   const [audioSeekTo, setAudioSeekTo] = useState<[number, number] | undefined>(undefined);
   const seekCounter = useRef(0);
@@ -1609,22 +1628,7 @@ export default function ArrangementDetailPage() {
                 </Flex>
               ) : (
                 <AudioPlayer
-                  tracks={(() => {
-                    const all = arrangement.audioAssets.map((a) => ({
-                      id: a.id,
-                      url: a.storageObject.objectKey,
-                      label: a.stemName || a.assetRole.replace("_", " "),
-                      role: a.assetRole,
-                    }));
-                    const hasStems = all.some((t) => t.role === "stem");
-                    const filtered = hasStems ? all.filter((t) => t.role !== "full_mix") : all;
-                    return filtered.sort((a, b) => {
-                      const aIsOther = a.label.toLowerCase() === "other";
-                      const bIsOther = b.label.toLowerCase() === "other";
-                      if (aIsOther !== bIsOther) return aIsOther ? 1 : -1;
-                      return a.label.localeCompare(b.label);
-                    });
-                  })()}
+                  tracks={audioTracks}
                   seekTo={audioSeekTo}
                 />
               )}

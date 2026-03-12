@@ -272,34 +272,58 @@ export function AudioPlayer({
   const signedUrls = useSignedUrls(objectKeys);
 
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [masterVolume, setMasterVolume] = useState([80]);
+
+  // Use a ref for currentTime to avoid re-renders on every frame
+  const currentTimeRef = useRef(0);
+
+  // DOM refs for direct manipulation (no re-renders)
+  const playheadRef = useRef<HTMLDivElement | null>(null);
+  const timerRef = useRef<HTMLParagraphElement | null>(null);
+  const durationRef = useRef(0);
+  // Keep durationRef in sync with state
+  useEffect(() => { durationRef.current = duration; }, [duration]);
 
   // Per-track state: { [trackId]: { muted, soloed, volume } }
   const [trackStates, setTrackStates] = useState<
     Record<string, { muted: boolean; soloed: boolean; volume: number }>
   >({});
 
-  // Initialize track states when tracks change
+  // Stable track IDs string for dependency comparison
+  const trackIdsKey = useMemo(() => tracks.map((t) => t.id).join(","), [tracks]);
+
+  // Initialize track states when tracks change (by ID, not reference)
   useEffect(() => {
     setTrackStates((prev) => {
       const next: typeof prev = {};
+      let changed = false;
       for (const t of tracks) {
-        next[t.id] = prev[t.id] || {
-          muted: false,
-          soloed: defaultSoloTrackIds?.includes(t.id) || false,
-          volume: 80,
-        };
+        if (prev[t.id]) {
+          next[t.id] = prev[t.id];
+        } else {
+          changed = true;
+          next[t.id] = {
+            muted: false,
+            soloed: defaultSoloTrackIds?.includes(t.id) || false,
+            volume: 80,
+          };
+        }
+      }
+      // Also check if any old keys were removed
+      if (!changed && Object.keys(prev).length === Object.keys(next).length) {
+        return prev; // No change — return same reference to skip re-render
       }
       return next;
     });
-  }, [tracks]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackIdsKey]);
 
   // Tracks container ref + waveform area measurements for unified playhead
   const tracksContainerRef = useRef<HTMLDivElement | null>(null);
-  const [waveformLeft, setWaveformLeft] = useState(0);
-  const [waveformWidth, setWaveformWidth] = useState(0);
+  const waveformLeftRef = useRef(0);
+  const waveformWidthRef = useRef(0);
+  const [waveformMeasured, setWaveformMeasured] = useState(false);
 
   // Audio element refs — one per track
   const audioRefsMap = useRef<Map<string, HTMLAudioElement>>(new Map());
@@ -317,7 +341,7 @@ export function AudioPlayer({
   const onPositionChangeRef = useRef(onPositionChange);
   onPositionChangeRef.current = onPositionChange;
 
-  // Register audio elements
+  // Register audio elements — stable callback per track
   const registerAudio = useCallback((trackId: string, el: HTMLAudioElement | null) => {
     if (el) {
       audioRefsMap.current.set(trackId, el);
@@ -338,8 +362,9 @@ export function AudioPlayer({
       if (!waveformEl) return;
       const containerRect = container.getBoundingClientRect();
       const waveRect = waveformEl.getBoundingClientRect();
-      setWaveformLeft(waveRect.left - containerRect.left);
-      setWaveformWidth(waveRect.width);
+      waveformLeftRef.current = waveRect.left - containerRect.left;
+      waveformWidthRef.current = waveRect.width;
+      setWaveformMeasured(waveRect.width > 0);
     };
 
     // Delay initial measurement to ensure children are rendered
@@ -350,7 +375,8 @@ export function AudioPlayer({
       cancelAnimationFrame(raf);
       ro.disconnect();
     };
-  }, [tracks]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackIdsKey]);
 
   // Determine master track (full_mix first, then first track)
   const masterTrack = useMemo(
@@ -369,13 +395,38 @@ export function AudioPlayer({
     return [...tracks].sort((a, b) => (order[a.role] ?? 99) - (order[b.role] ?? 99));
   }, [tracks]);
 
-  // Master audio event handlers (used as JSX props on the <audio> element)
-  const handleMasterTimeUpdate = useCallback((e: React.SyntheticEvent<HTMLAudioElement>) => {
-    const audio = e.currentTarget;
-    setCurrentTime(audio.currentTime);
-    onPositionChangeRef.current?.(audio.currentTime * 1000);
+  // --- RAF loop: update playhead & timer via direct DOM manipulation ---
+  const isPlayingRef = useRef(false);
+  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+
+  const updatePlayheadDOM = useCallback((time: number) => {
+    const dur = durationRef.current;
+    if (playheadRef.current && dur > 0) {
+      playheadRef.current.style.left = `${(time / dur) * 100}%`;
+    }
+    if (timerRef.current) {
+      timerRef.current.textContent = `${formatTime(time)} / ${formatTime(dur)}`;
+    }
   }, []);
 
+  useEffect(() => {
+    if (!isPlaying) return;
+    let rafId: number;
+    const tick = () => {
+      const masterAudio = masterTrack ? audioRefsMap.current.get(masterTrack.id) : null;
+      if (masterAudio) {
+        const time = masterAudio.currentTime;
+        currentTimeRef.current = time;
+        updatePlayheadDOM(time);
+        onPositionChangeRef.current?.(time * 1000);
+      }
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  }, [isPlaying, masterTrack, updatePlayheadDOM]);
+
+  // Handle master audio ended
   const handleMasterEnded = useCallback(() => {
     setIsPlaying(false);
   }, []);
@@ -383,12 +434,13 @@ export function AudioPlayer({
   // Drift correction: sync non-master audio elements to master
   useEffect(() => {
     if (!isPlaying) return;
+    const masterTrackId = masterTrack?.id;
     const interval = setInterval(() => {
-      const masterAudio = masterTrack ? audioRefsMap.current.get(masterTrack.id) : null;
+      const masterAudio = masterTrackId ? audioRefsMap.current.get(masterTrackId) : null;
       if (!masterAudio) return;
       const masterTime = masterAudio.currentTime;
       audioRefsMap.current.forEach((audio, trackId) => {
-        if (trackId === masterTrack?.id) return;
+        if (trackId === masterTrackId) return;
         if (Math.abs(audio.currentTime - masterTime) > 0.05) {
           audio.currentTime = masterTime;
         }
@@ -470,8 +522,9 @@ export function AudioPlayer({
     audioRefsMap.current.forEach((audio) => {
       audio.currentTime = time;
     });
-    setCurrentTime(time);
-  }, []);
+    currentTimeRef.current = time;
+    updatePlayheadDOM(time);
+  }, [updatePlayheadDOM]);
 
   const togglePlay = useCallback(() => {
     if (isPlaying) {
@@ -486,7 +539,7 @@ export function AudioPlayer({
     seekAll(time);
   }, [seekAll]);
 
-  // --- Track state mutators ---
+  // --- Track state mutators (stable callbacks) ---
 
   const toggleMute = useCallback((trackId: string) => {
     setTrackStates((prev) => ({
@@ -508,6 +561,24 @@ export function AudioPlayer({
       [trackId]: { ...prev[trackId], volume: vol },
     }));
   }, []);
+
+  // Stable per-track callbacks to avoid breaking TrackRow memo
+  const trackCallbacks = useMemo(() => {
+    const map: Record<string, {
+      onMuteToggle: () => void;
+      onSoloToggle: () => void;
+      onVolumeChange: (vol: number) => void;
+    }> = {};
+    for (const t of tracks) {
+      map[t.id] = {
+        onMuteToggle: () => toggleMute(t.id),
+        onSoloToggle: () => toggleSolo(t.id),
+        onVolumeChange: (vol: number) => setTrackVolume(t.id, vol),
+      };
+    }
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackIdsKey, toggleMute, toggleSolo, setTrackVolume]);
 
   if (tracks.length === 0) {
     return (
@@ -532,7 +603,6 @@ export function AudioPlayer({
             preload="metadata"
             style={{ display: "none" }}
             {...(isMaster && {
-              onTimeUpdate: handleMasterTimeUpdate,
               onEnded: handleMasterEnded,
             })}
           />
@@ -552,20 +622,21 @@ export function AudioPlayer({
           {isPlaying ? <Pause size={16} /> : <Play size={16} />}
         </Button>
 
-        {/* Timestamp centered above waveform area */}
-        {waveformWidth > 0 && (
-          <Text
-            fontSize="xs"
-            color="gray.500"
-            fontFamily="mono"
-            position="absolute"
-            left={`${waveformLeft + waveformWidth / 2}px`}
-            transform="translateX(-50%)"
-            pointerEvents="none"
-          >
-            {formatTime(currentTime)} / {formatTime(duration)}
-          </Text>
-        )}
+        {/* Timestamp centered above waveform area — updated via ref, not state */}
+        <Text
+          as="span"
+          ref={timerRef}
+          fontSize="xs"
+          color="gray.500"
+          fontFamily="mono"
+          position="absolute"
+          left="50%"
+          transform="translateX(-50%)"
+          pointerEvents="none"
+          visibility={waveformMeasured ? "visible" : "hidden"}
+        >
+          0:00 / 0:00
+        </Text>
 
         <Box flex={1} />
 
@@ -593,6 +664,7 @@ export function AudioPlayer({
       <Box borderWidth="1px" borderColor="gray.100" borderRadius="md" p={2} ref={tracksContainerRef} position="relative">
         {sortedTracks.map((track) => {
           const ts = trackStates[track.id] || { muted: false, soloed: false, volume: 80 };
+          const cbs = trackCallbacks[track.id];
           return (
             <TrackRow
               key={track.id}
@@ -603,37 +675,36 @@ export function AudioPlayer({
               anySoloed={anySoloed}
               volume={ts.volume}
               onSeek={handleSeek}
-              onMuteToggle={() => toggleMute(track.id)}
-              onSoloToggle={() => toggleSolo(track.id)}
-              onVolumeChange={(vol) => setTrackVolume(track.id, vol)}
+              onMuteToggle={cbs?.onMuteToggle ?? (() => toggleMute(track.id))}
+              onSoloToggle={cbs?.onSoloToggle ?? (() => toggleSolo(track.id))}
+              onVolumeChange={cbs?.onVolumeChange ?? ((vol) => setTrackVolume(track.id, vol))}
               onDuration={handleDuration}
               audioRef={getAudioRef(track.id)}
             />
           );
         })}
 
-        {/* Unified playhead line */}
-        {duration > 0 && (
+        {/* Unified playhead line — positioned via ref, not state */}
+        <Box
+          position="absolute"
+          top={0}
+          bottom={0}
+          left={`${waveformLeftRef.current}px`}
+          w={`${waveformWidthRef.current}px`}
+          pointerEvents="none"
+          zIndex={10}
+          visibility={duration > 0 ? "visible" : "hidden"}
+        >
           <Box
+            ref={playheadRef}
             position="absolute"
             top={0}
             bottom={0}
-            left={`${waveformLeft}px`}
-            w={`${waveformWidth}px`}
-            pointerEvents="none"
-            zIndex={10}
-          >
-            <Box
-              position="absolute"
-              top={0}
-              bottom={0}
-              left={`${(currentTime / duration) * 100}%`}
-              w="2px"
-              bg="yellow.400"
-              transition={isPlaying ? "none" : "left 0.1s"}
-            />
-          </Box>
-        )}
+            left="0%"
+            w="2px"
+            bg="yellow.400"
+          />
+        </Box>
       </Box>
 
     </Box>
