@@ -192,6 +192,7 @@ export async function requireFeature(
     | "allowTransportControls"
     | "allowSyncMaps"
     | "allowAiProcessing"
+    | "allowPracticeTools"
   >
 ): Promise<void> {
   const tier = await getUserTier(userId);
@@ -207,6 +208,7 @@ export async function requireFeature(
     allowTransportControls: "Transport controls",
     allowSyncMaps: "Sync map editor",
     allowAiProcessing: "AI audio processing",
+    allowPracticeTools: "Practice tools (tempo & key)",
   };
 
   const agentOnlyFeatures = [

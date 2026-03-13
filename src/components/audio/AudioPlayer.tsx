@@ -15,9 +15,12 @@ import {
   Button,
   Badge,
   Slider,
+  Spinner,
 } from "@chakra-ui/react";
 import { useSignedUrls } from "@/hooks/useSignedUrl";
-import { Play, Pause, Volume2, VolumeX } from "lucide-react";
+import { Play, Pause, Volume2, VolumeX, SlidersHorizontal } from "lucide-react";
+import { PracticeToolsPanel } from "./PracticeToolsPanel";
+import { processPitchShift, clearPitchCache } from "@/lib/audio/pitch-processor";
 
 interface AudioTrack {
   id: string;
@@ -35,6 +38,14 @@ interface AudioPlayerProps {
   seekTo?: [number, number];
   transportStatus?: string;
   onPositionChange?: (ms: number) => void;
+  /** Whether practice tools (tempo/key) are unlocked for this user */
+  allowPracticeTools?: boolean;
+  /** Controlled tempo (50-150), managed by parent */
+  tempoPercent?: number;
+  onTempoChange?: (percent: number) => void;
+  /** Controlled pitch semitones (-6 to +6), managed by parent */
+  pitchSemitones?: number;
+  onPitchChange?: (semitones: number) => void;
 }
 
 function formatTime(seconds: number): string {
@@ -266,6 +277,11 @@ export function AudioPlayer({
   seekTo,
   transportStatus,
   onPositionChange,
+  allowPracticeTools = false,
+  tempoPercent: controlledTempo,
+  onTempoChange: controlledOnTempoChange,
+  pitchSemitones: controlledPitch,
+  onPitchChange: controlledOnPitchChange,
 }: AudioPlayerProps) {
   // Resolve signed URLs for all tracks
   const objectKeys = useMemo(() => tracks.map((t) => t.url), [tracks]);
@@ -274,6 +290,21 @@ export function AudioPlayer({
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
   const [masterVolume, setMasterVolume] = useState([80]);
+
+  // Practice tools state (internal fallback when not controlled)
+  const [internalTempo, setInternalTempo] = useState(100);
+  const [internalPitch, setInternalPitch] = useState(0);
+  const tempoPercent = controlledTempo ?? internalTempo;
+  const pitchSemitones = controlledPitch ?? internalPitch;
+  const onTempoChange = controlledOnTempoChange ?? setInternalTempo;
+  const onPitchChange = controlledOnPitchChange ?? setInternalPitch;
+
+  const [showPracticeTools, setShowPracticeTools] = useState(false);
+  const [isPitchProcessing, setIsPitchProcessing] = useState(false);
+
+  // Pitch-shifted blob URLs: trackId → blob URL (replaces signedUrl when pitch ≠ 0)
+  const [pitchShiftedUrls, setPitchShiftedUrls] = useState<Map<string, string>>(new Map());
+  const activePitchRef = useRef(0); // tracks which pitch value the current blob URLs are for
 
   // Use a ref for currentTime to avoid re-renders on every frame
   const currentTimeRef = useRef(0);
@@ -394,6 +425,104 @@ export function AudioPlayer({
     const order: Record<string, number> = { full_mix: 0, stem: 1, click: 2, guide: 3 };
     return [...tracks].sort((a, b) => (order[a.role] ?? 99) - (order[b.role] ?? 99));
   }, [tracks]);
+
+  // --- Apply tempo via playbackRate ---
+  useEffect(() => {
+    const rate = tempoPercent / 100;
+    audioRefsMap.current.forEach((audio) => {
+      audio.playbackRate = rate;
+      audio.preservesPitch = true;
+    });
+  }, [tempoPercent]);
+
+  // --- Offline pitch processing ---
+  useEffect(() => {
+    if (pitchSemitones === 0) {
+      // Reset to original URLs
+      if (activePitchRef.current !== 0) {
+        setPitchShiftedUrls(new Map());
+        activePitchRef.current = 0;
+      }
+      return;
+    }
+
+    // Build map of trackId → signed URL for processing
+    const trackUrlMap = new Map<string, string>();
+    for (const t of tracks) {
+      const url = signedUrls[t.url];
+      if (url) trackUrlMap.set(t.id, url);
+    }
+    if (trackUrlMap.size === 0) return;
+
+    let cancelled = false;
+    setIsPitchProcessing(true);
+
+    // Remember current position before processing
+    const masterAudio = masterTrack ? audioRefsMap.current.get(masterTrack.id) : null;
+    const savedTime = masterAudio?.currentTime ?? 0;
+    const wasPlaying = isPlaying;
+
+    // Pause during processing to avoid audio glitches on source swap
+    if (wasPlaying) {
+      audioRefsMap.current.forEach((audio) => audio.pause());
+    }
+
+    processPitchShift(trackUrlMap, pitchSemitones)
+      .then((result) => {
+        if (cancelled) return;
+        setPitchShiftedUrls(result);
+        activePitchRef.current = pitchSemitones;
+        setIsPitchProcessing(false);
+
+        // Restore position and playback after source swap settles
+        // Use a small timeout to let the browser load the new blob URLs
+        setTimeout(() => {
+          if (cancelled) return;
+          audioRefsMap.current.forEach((audio) => {
+            audio.currentTime = savedTime;
+          });
+          if (wasPlaying) {
+            audioRefsMap.current.forEach((audio) => {
+              if (audio.src) audio.play().catch(() => {});
+            });
+            setIsPlaying(true);
+          }
+        }, 100);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error("[AudioPlayer] Pitch shift failed:", err);
+        setIsPitchProcessing(false);
+        // Resume playback on error
+        if (wasPlaying) {
+          audioRefsMap.current.forEach((audio) => {
+            if (audio.src) audio.play().catch(() => {});
+          });
+          setIsPlaying(true);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pitchSemitones, trackIdsKey]);
+
+  // Cleanup pitch cache on unmount
+  useEffect(() => {
+    return () => clearPitchCache();
+  }, []);
+
+  // Compute effective src for each track (pitch-shifted blob URL or signed URL)
+  const getTrackSrc = useCallback(
+    (track: AudioTrack): string | undefined => {
+      if (pitchSemitones !== 0 && pitchShiftedUrls.has(track.id)) {
+        return pitchShiftedUrls.get(track.id);
+      }
+      return signedUrls[track.url] || undefined;
+    },
+    [pitchSemitones, pitchShiftedUrls, signedUrls]
+  );
 
   // --- RAF loop: update playhead & timer via direct DOM manipulation ---
   const isPlayingRef = useRef(false);
@@ -599,7 +728,8 @@ export function AudioPlayer({
           <audio
             key={t.id}
             ref={(el) => registerAudio(t.id, el)}
-            src={signedUrls[t.url] || undefined}
+            src={getTrackSrc(t)}
+            crossOrigin="anonymous"
             preload="metadata"
             style={{ display: "none" }}
             {...(isMaster && {
@@ -618,8 +748,15 @@ export function AudioPlayer({
           onClick={togglePlay}
           px={3}
           minW="40px"
+          disabled={isPitchProcessing}
         >
-          {isPlaying ? <Pause size={16} /> : <Play size={16} />}
+          {isPitchProcessing ? (
+            <Spinner size="sm" />
+          ) : isPlaying ? (
+            <Pause size={16} />
+          ) : (
+            <Play size={16} />
+          )}
         </Button>
 
         {/* Timestamp centered above waveform area — updated via ref, not state */}
@@ -640,6 +777,20 @@ export function AudioPlayer({
 
         <Box flex={1} />
 
+        {/* Practice tools toggle */}
+        {allowPracticeTools !== undefined && (
+          <Button
+            size="xs"
+            variant={showPracticeTools ? "solid" : "ghost"}
+            colorPalette={showPracticeTools ? "purple" : "gray"}
+            onClick={() => setShowPracticeTools((v) => !v)}
+            title="Practice tools (tempo & key)"
+            px={1.5}
+          >
+            <SlidersHorizontal size={14} />
+          </Button>
+        )}
+
         <Volume2 size={14} color="var(--chakra-colors-gray-400)" />
         <Box w="80px">
           <Slider.Root
@@ -659,6 +810,20 @@ export function AudioPlayer({
           </Slider.Root>
         </Box>
       </Flex>
+
+      {/* Practice tools panel (collapsible) */}
+      {showPracticeTools && (
+        <Box mb={2}>
+          <PracticeToolsPanel
+            tempoPercent={tempoPercent}
+            onTempoChange={onTempoChange}
+            pitchSemitones={pitchSemitones}
+            onPitchChange={onPitchChange}
+            isLocked={!allowPracticeTools}
+            isPitchProcessing={isPitchProcessing}
+          />
+        </Box>
+      )}
 
       {/* Track rows with unified playhead */}
       <Box borderWidth="1px" borderColor="gray.100" borderRadius="md" p={2} ref={tracksContainerRef} position="relative">

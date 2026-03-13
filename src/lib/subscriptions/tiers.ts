@@ -12,6 +12,7 @@ export interface TierLimits {
   allowTransportControls: boolean;
   allowSyncMaps: boolean;
   allowAiProcessing: boolean;
+  allowPracticeTools: boolean;
   maxAudioUploads: number;
 }
 
@@ -28,6 +29,7 @@ export const TIER_LIMITS: Record<Tier, TierLimits> = {
     allowTransportControls: false,
     allowSyncMaps: false,
     allowAiProcessing: true,
+    allowPracticeTools: false,
     maxAudioUploads: 1,
   },
   band: {
@@ -42,6 +44,7 @@ export const TIER_LIMITS: Record<Tier, TierLimits> = {
     allowTransportControls: false,
     allowSyncMaps: false,
     allowAiProcessing: true,
+    allowPracticeTools: true,
     maxAudioUploads: Infinity,
   },
   agent: {
@@ -56,6 +59,7 @@ export const TIER_LIMITS: Record<Tier, TierLimits> = {
     allowTransportControls: true,
     allowSyncMaps: true,
     allowAiProcessing: true,
+    allowPracticeTools: true,
     maxAudioUploads: Infinity,
   },
 };

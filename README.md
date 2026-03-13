@@ -14,13 +14,14 @@ Rehearsal management platform for bands. Organize songs, arrangements, parts, an
 - **AI Section Analysis** — Automatically identify song sections (Intro, Verse, Chorus, etc.) from audio and sheet music using GPT-4o
 - **AI Transcription** — Audio-to-MusicXML sheet music generation via piano transcription and GPT-4o
 - **Audio Waveform Player** — Interactive waveform visualization (WaveSurfer.js) with track selector (full mix + individual stems), volume control, and playback position sync
+- **Practice Tools** — Tempo control (50–150%) and key transposition (±6 semitones) for paid tiers. Tempo uses native playback rate; pitch shifting uses offline SoundTouch processing. Score transposition via OSMD's TransposeCalculator for MusicXML files
 - **Drag-and-Drop Upload** — Full-width drop zone on arrangement page for uploading audio — triggers the entire AI pipeline with a single drop
 - **Auto-Assignment** — Automatically assigns band members to arrangement parts by matching their default instrument to stem-generated parts
 - **Fullscreen Sheet Music** — View PDF and MusicXML charts in fullscreen with bar-position highlighting
 - **Score Sync Maps** — Map audio timestamps to bar numbers for synchronized playback
 - **Real-Time Rehearsal Sessions** — WebSocket-powered transport with synchronized state
 - **Email Notifications** — Welcome emails, password reset flow, and band invite emails via Resend
-- **Subscription Tiers** — Free, Band, and Agent tiers with Stripe billing and tier-based limits (bands, members, songs, features)
+- **Subscription Tiers** — Free, Band, and Agent tiers with Stripe billing and tier-based limits (bands, members, songs, features, practice tools)
 
 ## Tech Stack
 
@@ -34,7 +35,7 @@ Rehearsal management platform for bands. Organize songs, arrangements, parts, an
 | State | TanStack Query, Zustand |
 | Payments | Stripe |
 | AI/ML | Replicate (Demucs, Essentia), OpenAI (GPT-4o) |
-| Audio | WaveSurfer.js |
+| Audio | WaveSurfer.js, SoundTouchJS |
 | Email | Resend |
 | Hosting | Vercel + Supabase |
 

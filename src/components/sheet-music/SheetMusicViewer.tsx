@@ -14,6 +14,8 @@ interface SheetMusicViewerProps {
   fileType: "pdf" | "musicxml";
   fileName?: string;
   currentBar?: number | null;
+  /** Transpose the score by this many semitones (MusicXML only) */
+  transposeSemitones?: number;
 }
 
 export function SheetMusicViewer({
@@ -21,6 +23,7 @@ export function SheetMusicViewer({
   fileType,
   fileName,
   currentBar,
+  transposeSemitones = 0,
 }: SheetMusicViewerProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -49,6 +52,7 @@ export function SheetMusicViewer({
           fileUrl={fileUrl}
           fileName={fileName}
           currentBar={currentBar}
+          transposeSemitones={transposeSemitones}
           isFullscreen={isFullscreen}
           onToggleFullscreen={toggleFullscreen}
         />
@@ -73,12 +77,14 @@ function MusicXmlViewer({
   fileUrl,
   fileName,
   currentBar,
+  transposeSemitones = 0,
   isFullscreen,
   onToggleFullscreen,
 }: {
   fileUrl: string;
   fileName?: string;
   currentBar?: number | null;
+  transposeSemitones?: number;
   isFullscreen: boolean;
   onToggleFullscreen: () => void;
 }) {
@@ -98,7 +104,7 @@ function MusicXmlViewer({
       setError(null);
 
       try {
-        const { OpenSheetMusicDisplay } = await import(
+        const { OpenSheetMusicDisplay, TransposeCalculator } = await import(
           "opensheetmusicdisplay"
         );
 
@@ -116,6 +122,7 @@ function MusicXmlViewer({
         });
 
         osmdRef.current = osmd;
+        osmd.TransposeCalculator = new TransposeCalculator();
 
         const res = await fetch(fileUrl);
         if (!res.ok) throw new Error("Failed to fetch MusicXML file");
@@ -179,6 +186,19 @@ function MusicXmlViewer({
       osmdRef.current.render();
     }
   }, [zoom]);
+
+  // Apply transposition
+  useEffect(() => {
+    const osmd = osmdRef.current;
+    if (!osmd || loading) return;
+    try {
+      osmd.Sheet.Transpose = transposeSemitones;
+      osmd.updateGraphic();
+      osmd.render();
+    } catch (err) {
+      console.warn("[SheetMusicViewer] Transposition failed:", err);
+    }
+  }, [transposeSemitones, loading]);
 
   // Re-render when entering/exiting fullscreen (container size changes)
   useEffect(() => {

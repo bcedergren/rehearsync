@@ -48,6 +48,7 @@ const PLANS = [
       "AI stem separation",
       "AI section detection",
       "Waveform audio player",
+      "Practice tools (tempo & key change)",
       "Email invites",
       "Arrangement versioning",
     ],

@@ -166,6 +166,18 @@ export default function ArrangementDetailPage() {
     `/bands/${bandId}/members`
   );
 
+  // User tier for feature gating
+  interface MeResponse {
+    user: { id: string; tier: string };
+    subscription: { tier: string; limits: Record<string, boolean | number> };
+  }
+  const { data: meData } = useApiQuery<MeResponse>(["me"], "/me");
+  const allowPracticeTools = meData?.subscription?.limits?.allowPracticeTools === true;
+
+  // Practice tools state (lifted so AudioPlayer + SheetMusicViewer share the same values)
+  const [tempoPercent, setTempoPercent] = useState(100);
+  const [pitchSemitones, setPitchSemitones] = useState(0);
+
   // Inline editing for song title and arrangement name
   const [editingSongTitle, setEditingSongTitle] = useState(false);
   const [editingArrName, setEditingArrName] = useState(false);
@@ -1630,6 +1642,11 @@ export default function ArrangementDetailPage() {
                 <AudioPlayer
                   tracks={audioTracks}
                   seekTo={audioSeekTo}
+                  allowPracticeTools={allowPracticeTools}
+                  tempoPercent={tempoPercent}
+                  onTempoChange={setTempoPercent}
+                  pitchSemitones={pitchSemitones}
+                  onPitchChange={setPitchSemitones}
                 />
               )}
 
@@ -2238,6 +2255,7 @@ export default function ArrangementDetailPage() {
                   fileUrl={`/api/v1/files/${previewAsset.objectKey}`}
                   fileType={previewAsset.fileType as "pdf" | "musicxml"}
                   fileName={previewAsset.fileName}
+                  transposeSemitones={pitchSemitones}
                 />
               )}
             </Dialog.Body>
