@@ -299,7 +299,7 @@ export function AudioPlayer({
   const onTempoChange = controlledOnTempoChange ?? setInternalTempo;
   const onPitchChange = controlledOnPitchChange ?? setInternalPitch;
 
-  const [showPracticeTools, setShowPracticeTools] = useState(false);
+  const [showPracticeTools, setShowPracticeTools] = useState(allowPracticeTools === true);
   const [isPitchProcessing, setIsPitchProcessing] = useState(false);
 
   // Pitch-shifted blob URLs: trackId → blob URL (replaces signedUrl when pitch ≠ 0)
