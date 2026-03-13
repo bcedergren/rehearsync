@@ -12,7 +12,7 @@ Rehearsal management platform for bands. Organize songs, arrangements, parts, an
 - **Fully Automated AI Pipeline** — Upload a full mix and everything cascades automatically: stem separation, beat detection, part creation, member assignment, sheet music transcription, and section analysis
 - **AI Audio Processing** — Separate stems (Demucs), auto-detect beats (Essentia) for sync maps
 - **AI Section Analysis** — Automatically identify song sections (Intro, Verse, Chorus, etc.) from audio and sheet music using GPT-4o
-- **AI Transcription** — Audio-to-MusicXML sheet music generation via piano transcription and GPT-4o
+- **AI Transcription** — Audio-to-MusicXML sheet music generation via piano transcription and GPT-4o. Guitar stems support Lead/Rhythm split mode — GPT-4o classifies MIDI notes as melodic (lead) or chordal (rhythm) and generates separate MusicXML for each part
 - **Audio Waveform Player** — Interactive waveform visualization (WaveSurfer.js) with track selector (full mix + individual stems), volume control, and playback position sync
 - **Practice Tools** — Tempo control (50–150%) and key transposition (±6 semitones) for paid tiers. Tempo uses native playback rate; pitch shifting uses offline SoundTouch processing. Score transposition via OSMD's TransposeCalculator for MusicXML files
 - **Drag-and-Drop Upload** — Full-width drop zone on arrangement page for uploading audio — triggers the entire AI pipeline with a single drop
@@ -126,9 +126,10 @@ RehearSync uses Replicate and OpenAI to process audio:
 1. **Stem Separation** — Demucs splits a full mix into vocals, drums, bass, guitar, piano, and other (6 stems)
 2. **Beat Detection** — Essentia estimates BPM and generates bar-level sync maps
 3. **Section Analysis** — GPT-4o analyzes audio metadata and MusicXML to identify song sections (Intro, Verse, Chorus, etc.)
-4. **Transcription** — Piano transcription converts stems to MIDI, then GPT-4o generates MusicXML sheet music
+4. **Transcription** — Piano transcription converts stems to MIDI, then generates MusicXML sheet music
+5. **Guitar Lead/Rhythm Split** — For guitar stems, GPT-4o classifies MIDI notes as melodic (lead) or chordal (rhythm), generating separate MusicXML for each. Includes a heuristic fallback based on temporal note clustering. Users can choose "Lead + Rhythm" (split) or "Merged" (single part) mode before transcription
 
-All 6 steps auto-trigger when a full mix is uploaded — stem separation and beat detection start in parallel, then parts, assignments, transcription, and sections cascade as each step completes. Processing runs asynchronously via Replicate webhooks handled by a Supabase Edge Function, keeping Vercel serverless functions within timeout limits.
+All 6 steps auto-trigger when a full mix is uploaded — stem separation and beat detection start in parallel, then parts, assignments, transcription, and sections cascade as each step completes. Guitar stems auto-create Lead Guitar and Rhythm Guitar parts. Processing runs asynchronously via Replicate webhooks handled by a Supabase Edge Function, keeping Vercel serverless functions within timeout limits.
 
 ## License
 

@@ -5,7 +5,7 @@ import { requireFeature } from "@/lib/subscriptions/guards";
 import { prisma } from "@/lib/prisma";
 import { createSignedDownloadUrl } from "@/lib/supabase-storage";
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 // Section generation is part of the automated post-upload setup flow,
 // so it is NOT gated by checkFreeTierLock.

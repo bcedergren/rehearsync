@@ -56,12 +56,19 @@ export async function createStemSeparationPrediction(audioUrl: string) {
 }
 
 export async function createTranscriptionPrediction(audioUrl: string, stemName?: string) {
+  // Only pass stem_name for stems that the model's music21 instrument map supports.
+  // Other stems (vocals, piano, other) can trigger missing instrument errors
+  // (e.g. "module 'music21.instrument' has no attribute 'Cello'").
+  // The webhook's local MIDI→MusicXML converter handles instrument selection for all stems.
+  const safeStemNames = ["guitar", "bass", "drums"];
+  const passStemName = stemName && safeStemNames.includes(stemName.toLowerCase());
+
   return withRetry(() =>
     replicate.predictions.create({
       version: MODELS.BASIC_PITCH.split(":")[1],
       input: {
         audio_file: audioUrl,
-        ...(stemName ? { stem_name: stemName } : {}),
+        ...(passStemName ? { stem_name: stemName } : {}),
       },
       webhook: getWebhookUrl(),
       webhook_events_filter: ["completed"],

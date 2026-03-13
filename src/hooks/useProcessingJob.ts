@@ -26,7 +26,7 @@ interface UseProcessingJobReturn {
   error: string | null;
   progress: number | null;
   progressLabel: string | null;
-  startJob: (audioAssetId: string, jobType: string) => Promise<void>;
+  startJob: (audioAssetId: string, jobType: string, extras?: Record<string, unknown>) => Promise<void>;
   resumeJob: (jobId: string, jobType: string) => void;
   reset: () => void;
 }
@@ -106,7 +106,7 @@ export function useProcessingJob(
   );
 
   const startJob = useCallback(
-    async (audioAssetId: string, jobType: string) => {
+    async (audioAssetId: string, jobType: string, extras?: Record<string, unknown>) => {
       setError(null);
       setIsProcessing(true);
       setProgress(null);
@@ -117,7 +117,7 @@ export function useProcessingJob(
           "/processing/start",
           {
             method: "POST",
-            body: JSON.stringify({ audioAssetId, jobType }),
+            body: JSON.stringify({ audioAssetId, jobType, ...extras }),
           }
         );
 

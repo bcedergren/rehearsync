@@ -23,7 +23,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     });
   }
 
-  const { audioAssetId, jobType } = parsed.data;
+  const { audioAssetId, jobType, guitarMode } = parsed.data;
 
   // Block transcription jobs when the feature is disabled
   if (jobType === "transcription" && process.env.NEXT_PUBLIC_TRANSCRIPTION_ENABLED !== "true") {
@@ -64,10 +64,14 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
   }
 
   // Create the processing job
+  const inputPayload: Record<string, unknown> = {};
+  if (guitarMode) inputPayload.guitarMode = guitarMode;
+
   const job = await processingService.createJob(
     audioAsset.arrangementId,
     audioAssetId,
-    jobType
+    jobType,
+    Object.keys(inputPayload).length > 0 ? inputPayload : undefined
   );
 
   // Get a signed URL for Replicate to access the audio

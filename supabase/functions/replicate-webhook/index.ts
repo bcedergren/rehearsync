@@ -75,7 +75,7 @@ async function findJobByExternalId(externalId: string) {
     .from("processing_jobs")
     .select(
       `
-      id, arrangement_id, audio_asset_id, job_type, status,
+      id, arrangement_id, audio_asset_id, job_type, status, input_payload,
       audio_assets!audio_asset_id (
         id, arrangement_id,
         storage_objects!storage_object_id ( bucket, object_key )
@@ -445,8 +445,16 @@ function stemToNotationMode(stemName?: string | null): NotationMode {
   return "standard";
 }
 
+/** Check if a stem should render both standard notation + tab (dual-staff) */
+function isDualStaff(stemName?: string | null): boolean {
+  if (!stemName) return false;
+  const s = stemName.toLowerCase();
+  return s === "guitar" || s === "bass";
+}
+
 function midiToMusicXml(midi: MidiLike, title?: string, stemName?: string | null): string {
   const mode = stemToNotationMode(stemName);
+  const dualStaff = isDualStaff(stemName);
 
   // Collect all notes across tracks
   const allNotes: { midi: number; time: number; duration: number; velocity: number }[] = [];
@@ -470,32 +478,68 @@ function midiToMusicXml(midi: MidiLike, title?: string, stemName?: string | null
   const secondsPerMeasure = secondsPerBeat * beatsPerMeasure * (4 / beatUnit);
   const measureDivisions = divisions * beatsPerMeasure * (4 / beatUnit);
 
-  // Determine clef
-  let clefXml: string;
   const isBass = stemName?.toLowerCase() === "bass";
   const tuning = isBass ? BASS_TUNING : GUITAR_TUNING;
   const numStrings = tuning.length;
 
-  if (mode === "tab") {
-    clefXml = `<clef><sign>TAB</sign><line>5</line></clef>
+  // Build attributes XML for the first measure
+  function buildAttributesXml(): string {
+    let xml = `
+      <attributes>
+        <divisions>${divisions}</divisions>`;
+
+    if (dualStaff) {
+      // Dual-staff: staff 1 = standard notation, staff 2 = tablature
+      xml += `
+        <staves>2</staves>
+        <time><beats>${beatsPerMeasure}</beats><beat-type>${beatUnit}</beat-type></time>
+        <clef number="1"><sign>${isBass ? "F" : "G"}</sign><line>${isBass ? 4 : 2}</line></clef>
+        <clef number="2"><sign>TAB</sign><line>5</line></clef>
+        <staff-details number="2">
+          <staff-lines>${numStrings}</staff-lines>`;
+      for (let s = 0; s < numStrings; s++) {
+        const pitch = tuning[s];
+        const oct = Math.floor(pitch / 12) - 1;
+        const pc = pitch % 12;
+        xml += `\n          <staff-tuning line="${numStrings - s}"><tuning-step>${NOTE_NAMES[pc]}</tuning-step>`;
+        if (NOTE_ALTERS[pc] !== 0) xml += `<tuning-alter>${NOTE_ALTERS[pc]}</tuning-alter>`;
+        xml += `<tuning-octave>${oct}</tuning-octave></staff-tuning>`;
+      }
+      xml += `
+        </staff-details>`;
+    } else if (mode === "tab") {
+      // Tab-only fallback (shouldn't happen with dualStaff, but kept for safety)
+      xml += `
+        <time><beats>${beatsPerMeasure}</beats><beat-type>${beatUnit}</beat-type></time>
+        <clef><sign>TAB</sign><line>5</line></clef>
         <staff-details>
           <staff-lines>${numStrings}</staff-lines>`;
-    for (let s = 0; s < numStrings; s++) {
-      const pitch = tuning[s];
-      const oct = Math.floor(pitch / 12) - 1;
-      const pc = pitch % 12;
-      clefXml += `\n          <staff-tuning line="${numStrings - s}"><tuning-step>${NOTE_NAMES[pc]}</tuning-step>`;
-      if (NOTE_ALTERS[pc] !== 0) clefXml += `<tuning-alter>${NOTE_ALTERS[pc]}</tuning-alter>`;
-      clefXml += `<tuning-octave>${oct}</tuning-octave></staff-tuning>`;
+      for (let s = 0; s < numStrings; s++) {
+        const pitch = tuning[s];
+        const oct = Math.floor(pitch / 12) - 1;
+        const pc = pitch % 12;
+        xml += `\n          <staff-tuning line="${numStrings - s}"><tuning-step>${NOTE_NAMES[pc]}</tuning-step>`;
+        if (NOTE_ALTERS[pc] !== 0) xml += `<tuning-alter>${NOTE_ALTERS[pc]}</tuning-alter>`;
+        xml += `<tuning-octave>${oct}</tuning-octave></staff-tuning>`;
+      }
+      xml += `
+        </staff-details>`;
+    } else if (mode === "drums") {
+      xml += `
+        <time><beats>${beatsPerMeasure}</beats><beat-type>${beatUnit}</beat-type></time>
+        <clef><sign>percussion</sign></clef>`;
+    } else {
+      const avgPitch = allNotes.reduce((s, n) => s + n.midi, 0) / allNotes.length;
+      const sign = avgPitch < 60 ? "F" : "G";
+      const line = avgPitch < 60 ? 4 : 2;
+      xml += `
+        <time><beats>${beatsPerMeasure}</beats><beat-type>${beatUnit}</beat-type></time>
+        <clef><sign>${sign}</sign><line>${line}</line></clef>`;
     }
-    clefXml += `\n        </staff-details>`;
-  } else if (mode === "drums") {
-    clefXml = `<clef><sign>percussion</sign></clef>`;
-  } else {
-    const avgPitch = allNotes.reduce((s, n) => s + n.midi, 0) / allNotes.length;
-    const sign = avgPitch < 60 ? "F" : "G";
-    const line = avgPitch < 60 ? 4 : 2;
-    clefXml = `<clef><sign>${sign}</sign><line>${line}</line></clef>`;
+
+    xml += `
+      </attributes>`;
+    return xml;
   }
 
   // Total duration
@@ -582,7 +626,6 @@ function midiToMusicXml(midi: MidiLike, title?: string, stemName?: string | null
     for (let s = 0; s < tuning.length; s++) {
       const fret = midiNote - tuning[s];
       if (fret >= 0 && fret <= 24) {
-        // Prefer lower frets on higher strings
         const score = fret + s * 0.1;
         if (score < bestScore) {
           bestScore = score;
@@ -591,7 +634,6 @@ function midiToMusicXml(midi: MidiLike, title?: string, stemName?: string | null
         }
       }
     }
-    // If note is out of range, place on lowest string
     if (bestScore === Infinity) {
       bestString = tuning.length;
       bestFret = Math.max(0, midiNote - tuning[tuning.length - 1]);
@@ -599,18 +641,19 @@ function midiToMusicXml(midi: MidiLike, title?: string, stemName?: string | null
     return { string: bestString, fret: bestFret };
   }
 
-  function restXml(dur: number): string {
+  function restXml(dur: number, staffNum?: number): string {
     const parts = splitDuration(dur);
     let xml = "";
+    const staffTag = staffNum ? `<staff>${staffNum}</staff>` : "";
     for (const p of parts) {
       xml += `\n      <note><rest/><duration>${p.dur}</duration><type>${p.type}</type>`;
       if (p.dot) xml += `<dot/>`;
+      xml += staffTag;
       xml += `</note>`;
     }
-    return xml || `\n      <note><rest/><duration>${dur}</duration><type>quarter</type></note>`;
+    return xml || `\n      <note><rest/><duration>${dur}</duration><type>quarter</type>${staffTag}</note>`;
   }
 
-  // Build note pitch/unpitched XML based on mode
   function notePitchXml(midiNote: number): string {
     if (mode === "drums") {
       const dm = DRUM_MAP[midiNote] || { step: "C", octave: 5, notehead: "normal", name: "Perc" };
@@ -623,8 +666,8 @@ function midiToMusicXml(midi: MidiLike, title?: string, stemName?: string | null
     return xml;
   }
 
-  function noteNotationsXml(midiNote: number): string {
-    if (mode === "tab") {
+  function noteNotationsXml(midiNote: number, forTab: boolean): string {
+    if (forTab) {
       const { string, fret } = midiToTab(midiNote);
       return `<notations><technical><string>${string}</string><fret>${fret}</fret></technical></notations>`;
     }
@@ -637,6 +680,67 @@ function midiToMusicXml(midi: MidiLike, title?: string, stemName?: string | null
     return "";
   }
 
+  /** Render notes for a single staff within a measure. Returns { xml, forwardDuration } */
+  function renderMeasureNotes(
+    notes: typeof allNotes,
+    measureStart: number,
+    measDiv: number,
+    staffNum?: number,
+    forTab = false,
+  ): { xml: string; totalForward: number } {
+    const staffTag = staffNum ? `<staff>${staffNum}</staff>` : "";
+    let xml = "";
+
+    if (notes.length === 0) {
+      xml += `\n      <note><rest measure="yes"/><duration>${measDiv}</duration><type>whole</type>${staffTag}</note>`;
+      return { xml, totalForward: measDiv };
+    }
+
+    let cursor = 0;
+    for (let i = 0; i < notes.length; i++) {
+      const note = notes[i];
+      const noteStartDiv = Math.max(0, Math.round(((note.time - measureStart) / secondsPerBeat) * divisions));
+      const isChord = i > 0 && Math.abs(notes[i].time - notes[i - 1].time) < 0.02;
+
+      if (!isChord) {
+        const gap = noteStartDiv - cursor;
+        if (gap >= 2) {
+          xml += restXml(gap, staffNum);
+          cursor = noteStartDiv;
+        } else if (gap > 0) {
+          cursor = noteStartDiv;
+        }
+      }
+
+      const rawDurDiv = Math.max(1, Math.round((note.duration / secondsPerBeat) * divisions));
+      const remainingInMeasure = measDiv - cursor;
+      const clampedDur = Math.min(rawDurDiv, Math.max(1, remainingInMeasure));
+      const { type, dot, actualDur } = durationToType(clampedDur);
+      const finalDur = Math.min(actualDur, remainingInMeasure);
+
+      xml += `\n      <note>`;
+      if (isChord) xml += `<chord/>`;
+      xml += notePitchXml(note.midi);
+      xml += `<duration>${finalDur}</duration><type>${type}</type>`;
+      if (dot) xml += `<dot/>`;
+      xml += staffTag;
+      xml += noteNotationsXml(note.midi, forTab);
+      xml += `</note>`;
+
+      if (!isChord) {
+        cursor += finalDur;
+      }
+    }
+
+    const remaining = measDiv - cursor;
+    if (remaining >= 2) {
+      xml += restXml(remaining, staffNum);
+      cursor += remaining;
+    }
+
+    return { xml, totalForward: cursor };
+  }
+
   // Bucket notes into measures
   const measures: typeof allNotes[] = Array.from({ length: totalMeasures }, () => []);
   for (const note of allNotes) {
@@ -645,9 +749,11 @@ function midiToMusicXml(midi: MidiLike, title?: string, stemName?: string | null
   }
 
   const scoreTitle = title || "Transcription";
-  const partName = mode === "tab"
+  const partName = dualStaff
     ? (isBass ? "Bass" : "Guitar")
-    : mode === "drums" ? "Drums" : "Music";
+    : mode === "tab"
+      ? (isBass ? "Bass" : "Guitar")
+      : mode === "drums" ? "Drums" : "Music";
 
   // Build MusicXML
   let xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -663,12 +769,7 @@ function midiToMusicXml(midi: MidiLike, title?: string, stemName?: string | null
     xml += `\n    <measure number="${m + 1}">`;
 
     if (m === 0) {
-      xml += `
-      <attributes>
-        <divisions>${divisions}</divisions>
-        <time><beats>${beatsPerMeasure}</beats><beat-type>${beatUnit}</beat-type></time>
-        ${clefXml}
-      </attributes>`;
+      xml += buildAttributesXml();
       xml += `\n      <direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>${Math.round(bpm)}</per-minute></metronome></direction-type></direction>`;
     }
 
@@ -676,48 +777,22 @@ function midiToMusicXml(midi: MidiLike, title?: string, stemName?: string | null
     const measDiv = Math.round(measureDivisions);
     const notes = measures[m];
 
-    if (notes.length === 0) {
-      xml += `\n      <note><rest measure="yes"/><duration>${measDiv}</duration><type>whole</type></note>`;
+    if (dualStaff) {
+      // Staff 1: Standard notation (no tab annotations)
+      const staff1 = renderMeasureNotes(notes, measureStart, measDiv, 1, false);
+      xml += staff1.xml;
+
+      // Backup to start of measure for staff 2
+      xml += `\n      <backup><duration>${measDiv}</duration></backup>`;
+
+      // Staff 2: Tablature (with string/fret annotations)
+      const staff2 = renderMeasureNotes(notes, measureStart, measDiv, 2, true);
+      xml += staff2.xml;
     } else {
-      let cursor = 0;
-      for (let i = 0; i < notes.length; i++) {
-        const note = notes[i];
-        const noteStartDiv = Math.max(0, Math.round(((note.time - measureStart) / secondsPerBeat) * divisions));
-        const isChord = i > 0 && Math.abs(notes[i].time - notes[i - 1].time) < 0.02;
-
-        if (!isChord) {
-          const gap = noteStartDiv - cursor;
-          if (gap >= 2) {
-            xml += restXml(gap);
-            cursor = noteStartDiv;
-          } else if (gap > 0) {
-            cursor = noteStartDiv;
-          }
-        }
-
-        const rawDurDiv = Math.max(1, Math.round((note.duration / secondsPerBeat) * divisions));
-        const remainingInMeasure = measDiv - cursor;
-        const clampedDur = Math.min(rawDurDiv, Math.max(1, remainingInMeasure));
-        const { type, dot, actualDur } = durationToType(clampedDur);
-        const finalDur = Math.min(actualDur, remainingInMeasure);
-
-        xml += `\n      <note>`;
-        if (isChord) xml += `<chord/>`;
-        xml += notePitchXml(note.midi);
-        xml += `<duration>${finalDur}</duration><type>${type}</type>`;
-        if (dot) xml += `<dot/>`;
-        xml += noteNotationsXml(note.midi);
-        xml += `</note>`;
-
-        if (!isChord) {
-          cursor += finalDur;
-        }
-      }
-
-      const remaining = measDiv - cursor;
-      if (remaining >= 2) {
-        xml += restXml(remaining);
-      }
+      // Single-staff rendering (drums, standard, or tab-only)
+      const forTab = mode === "tab";
+      const result = renderMeasureNotes(notes, measureStart, measDiv, undefined, forTab);
+      xml += result.xml;
     }
 
     xml += `\n    </measure>`;
@@ -725,6 +800,164 @@ function midiToMusicXml(midi: MidiLike, title?: string, stemName?: string | null
 
   xml += `\n  </part>\n</score-partwise>`;
   return xml;
+}
+
+// ─── Guitar Lead/Rhythm Split via GPT-4o ────────────────────────
+
+interface NoteEvent {
+  midi: number;
+  time: number;
+  duration: number;
+  velocity: number;
+}
+
+/**
+ * Classify guitar MIDI notes as "lead" or "rhythm" using GPT-4o.
+ * Lead = single-note melodic lines, solos, riffs.
+ * Rhythm = chords, strumming patterns, repeated chord shapes.
+ *
+ * Returns two arrays of note indices: [leadIndices, rhythmIndices]
+ */
+async function classifyGuitarNotes(
+  notes: NoteEvent[]
+): Promise<{ lead: NoteEvent[]; rhythm: NoteEvent[] }> {
+  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+  if (!OPENAI_API_KEY) {
+    console.warn("[guitar-split] OPENAI_API_KEY not set, falling back to heuristic split");
+    return heuristicGuitarSplit(notes);
+  }
+
+  // Serialize notes compactly: [index, midiNote, timeSeconds, durationSeconds]
+  // Limit to ~500 notes per chunk to stay within token limits
+  const MAX_NOTES = 500;
+  if (notes.length > MAX_NOTES) {
+    // For very long pieces, use heuristic (GPT-4o can't handle thousands of notes)
+    console.log(`[guitar-split] ${notes.length} notes exceeds limit, using heuristic`);
+    return heuristicGuitarSplit(notes);
+  }
+
+  const compact = notes.map((n, i) => [
+    i,
+    n.midi,
+    Math.round(n.time * 1000) / 1000,
+    Math.round(n.duration * 1000) / 1000,
+  ]);
+
+  try {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: `You are a music transcription expert. Given a list of guitar MIDI notes, classify each as "lead" or "rhythm".
+
+Lead guitar: single-note melodic lines, solos, riffs, bends, slides — notes that form a melody.
+Rhythm guitar: chords (multiple notes at the same time), strumming patterns, palm-muted power chords, arpeggiated chord shapes.
+
+Heuristics to consider:
+- Notes occurring simultaneously (within 50ms) are likely chord notes (rhythm)
+- Single notes in a melodic sequence (stepwise or scalar motion) are likely lead
+- High-velocity isolated notes in upper registers are likely lead
+- Repeated patterns at regular intervals are likely rhythm
+- When in doubt, classify as rhythm
+
+Input format: array of [index, midiNote, timeSeconds, durationSeconds]
+Output: Return ONLY a JSON object: { "lead": [indices], "rhythm": [indices] }
+Every index from the input MUST appear in exactly one array. No explanation.`,
+          },
+          {
+            role: "user",
+            content: JSON.stringify(compact),
+          },
+        ],
+        temperature: 0.1,
+        max_tokens: 4000,
+      }),
+    });
+
+    if (!res.ok) {
+      console.error(`[guitar-split] OpenAI error: ${res.status}`);
+      return heuristicGuitarSplit(notes);
+    }
+
+    const result = await res.json();
+    const content = result.choices?.[0]?.message?.content?.trim() ?? "";
+    const jsonStr = content.replace(/^```json?\s*/i, "").replace(/\s*```$/i, "");
+    const parsed = JSON.parse(jsonStr) as { lead: number[]; rhythm: number[] };
+
+    const leadSet = new Set(parsed.lead ?? []);
+    const lead: NoteEvent[] = [];
+    const rhythm: NoteEvent[] = [];
+
+    for (let i = 0; i < notes.length; i++) {
+      if (leadSet.has(i)) {
+        lead.push(notes[i]);
+      } else {
+        rhythm.push(notes[i]);
+      }
+    }
+
+    console.log(`[guitar-split] GPT-4o classified: ${lead.length} lead, ${rhythm.length} rhythm`);
+    return { lead, rhythm };
+  } catch (err) {
+    console.error("[guitar-split] GPT-4o classification failed:", err);
+    return heuristicGuitarSplit(notes);
+  }
+}
+
+/**
+ * Heuristic fallback: classify notes as lead or rhythm based on
+ * temporal clustering (simultaneous notes = chords = rhythm).
+ */
+function heuristicGuitarSplit(
+  notes: NoteEvent[]
+): { lead: NoteEvent[]; rhythm: NoteEvent[] } {
+  const TIME_THRESHOLD = 0.05; // 50ms — notes within this window are simultaneous
+  const lead: NoteEvent[] = [];
+  const rhythm: NoteEvent[] = [];
+
+  // Group notes by onset time
+  const groups: NoteEvent[][] = [];
+  let currentGroup: NoteEvent[] = [];
+
+  const sorted = [...notes].sort((a, b) => a.time - b.time);
+  for (const note of sorted) {
+    if (currentGroup.length === 0 || note.time - currentGroup[0].time < TIME_THRESHOLD) {
+      currentGroup.push(note);
+    } else {
+      groups.push(currentGroup);
+      currentGroup = [note];
+    }
+  }
+  if (currentGroup.length > 0) groups.push(currentGroup);
+
+  for (const group of groups) {
+    if (group.length >= 3) {
+      // 3+ simultaneous notes = chord = rhythm
+      rhythm.push(...group);
+    } else if (group.length === 1) {
+      // Single note = lead
+      lead.push(...group);
+    } else {
+      // 2 notes: could be power chord (rhythm) or double stop (lead)
+      // Check interval: power chord = 7 semitones (perfect 5th)
+      const interval = Math.abs(group[0].midi - group[1].midi);
+      if (interval === 7 || interval === 5 || interval === 12) {
+        rhythm.push(...group);
+      } else {
+        lead.push(...group);
+      }
+    }
+  }
+
+  console.log(`[guitar-split] Heuristic classified: ${lead.length} lead, ${rhythm.length} rhythm`);
+  return { lead, rhythm };
 }
 
 // ─── Transcription Handler (Piano Transcription → MIDI → MusicXML) ─────
@@ -795,31 +1028,41 @@ async function handleTranscription(
     midiStorageKey: midiKey,
   };
 
-  // Get MusicXML: prefer pre-built from Replicate (music21), fall back to local conversion
+  // Parse MIDI for note count and potential guitar split
+  const midi = new Midi(new Uint8Array(midiData));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allNotes: NoteEvent[] = midi.tracks.flatMap((t: any) => t.notes);
+  result.noteEventsCount = allNotes.length;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const songTitle = (job as any).arrangements?.songs?.title as string | undefined;
+
+  // Check if this is a guitar split transcription
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const inputPayload = (job as any).input_payload as Record<string, unknown> | null;
+  const guitarMode = (inputPayload?.guitarMode as string) ?? "merged";
+  const isGuitarSplit = stemName?.toLowerCase() === "guitar" && guitarMode === "split";
+
+  if (isGuitarSplit && allNotes.length > 0) {
+    console.log(`[transcription] Guitar split mode — classifying ${allNotes.length} notes`);
+    return await handleGuitarSplitTranscription(
+      job, bandId, arrangementId, midi, allNotes, songTitle, result
+    );
+  }
+
+  // ─── Standard (merged) transcription ───
   let musicXmlContent = "";
   try {
     if (musicxmlUrl) {
-      // Download pre-built MusicXML from Replicate (generated by music21)
       console.log("Using music21-generated MusicXML from Replicate");
       const xmlResponse = await fetch(musicxmlUrl);
       if (!xmlResponse.ok) {
         throw new Error(`Failed to download MusicXML: ${xmlResponse.status}`);
       }
       musicXmlContent = await xmlResponse.text();
-
-      // Count note events from MIDI for stats
-      const midi = new Midi(new Uint8Array(midiData));
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      result.noteEventsCount = midi.tracks.reduce((sum: number, t: any) => sum + t.notes.length, 0);
     } else {
-      // Legacy fallback: local deterministic MIDI → MusicXML conversion
       console.log("Falling back to local MIDI → MusicXML conversion");
-      const midi = new Midi(new Uint8Array(midiData));
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const songTitle = (job as any).arrangements?.songs?.title as string | undefined;
       musicXmlContent = midiToMusicXml(midi, songTitle, stemName);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      result.noteEventsCount = midi.tracks.reduce((sum: number, t: any) => sum + t.notes.length, 0);
     }
   } catch (err) {
     console.error("Failed to get MusicXML:", err);
@@ -834,7 +1077,24 @@ async function handleTranscription(
     return result;
   }
 
-  // Upload MusicXML to Supabase Storage
+  // Upload and link to part (standard single-part flow)
+  await uploadAndLinkMusicXml(
+    musicXmlContent, bandId, arrangementId, stemName, result, "transcription.musicxml"
+  );
+
+  return result;
+}
+
+/** Upload MusicXML content to storage and link it to a matching Part */
+async function uploadAndLinkMusicXml(
+  musicXmlContent: string,
+  bandId: string,
+  arrangementId: string,
+  partMatchName: string | null,
+  result: Record<string, unknown>,
+  fileName: string,
+  notes?: string
+) {
   const xmlId = crypto.randomUUID();
   const xmlKey = `bands/${bandId}/sheets/${xmlId}.musicxml`;
   const xmlBytes = new TextEncoder().encode(musicXmlContent);
@@ -850,26 +1110,25 @@ async function handleTranscription(
     throw new Error(`Failed to upload MusicXML: ${xmlUploadError.message}`);
   }
 
-  // Create StorageObject for MusicXML
   const xmlStorageObjectId = await createStorageObject(
     STORAGE_BUCKET,
     xmlKey,
-    "transcription.musicxml",
+    fileName,
     "application/vnd.recordare.musicxml+xml",
     xmlBytes.byteLength
   );
 
   result.musicXmlStorageObjectId = xmlStorageObjectId;
 
-  // Find the Part linked to this stem's audio asset (if any)
+  // Find the Part linked to this stem/instrument name
   let partId: string | null = null;
 
-  if (stemName) {
+  if (partMatchName) {
     const { data: matchingPart } = await supabase
       .from("parts")
       .select("id")
       .eq("arrangement_id", arrangementId)
-      .ilike("instrument_name", `%${stemName}%`)
+      .ilike("instrument_name", `%${partMatchName}%`)
       .limit(1)
       .single();
 
@@ -888,7 +1147,6 @@ async function handleTranscription(
     partId = anyPart?.id ?? null;
   }
 
-  // Create SheetMusicAsset if we found a matching part
   if (partId) {
     const { data: existingSheets } = await supabase
       .from("sheet_music_assets")
@@ -919,7 +1177,7 @@ async function handleTranscription(
         version_num: nextVersion,
         is_active: true,
         status: "active",
-        notes: "AI-generated from audio transcription",
+        notes: notes ?? "AI-generated from audio transcription",
       })
       .select("id")
       .single();
@@ -930,6 +1188,60 @@ async function handleTranscription(
       result.sheetMusicAssetId = sheetAsset.id;
       result.partId = partId;
     }
+  }
+}
+
+/** Handle guitar split: classify notes, generate two MusicXML files, link to Lead/Rhythm Guitar parts */
+async function handleGuitarSplitTranscription(
+  _job: Record<string, unknown>,
+  bandId: string,
+  arrangementId: string,
+  midi: MidiLike,
+  allNotes: NoteEvent[],
+  songTitle: string | undefined,
+  result: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const { lead, rhythm } = await classifyGuitarNotes(allNotes);
+
+  result.guitarSplit = true;
+  result.leadNoteCount = lead.length;
+  result.rhythmNoteCount = rhythm.length;
+
+  // Build synthetic MidiLike objects for each split
+  const baseMidi = {
+    header: midi.header,
+  };
+
+  // Generate Lead Guitar MusicXML
+  if (lead.length > 0) {
+    const leadMidi: MidiLike = {
+      ...baseMidi,
+      tracks: [{ notes: lead }],
+    };
+    const leadXml = midiToMusicXml(leadMidi, songTitle ? `${songTitle} — Lead Guitar` : "Lead Guitar", "guitar");
+    const leadResult: Record<string, unknown> = {};
+    await uploadAndLinkMusicXml(
+      leadXml, bandId, arrangementId, "lead guitar", leadResult, "lead-guitar.musicxml",
+      "AI-generated — lead guitar (split from guitar stem)"
+    );
+    result.leadSheetMusicAssetId = leadResult.sheetMusicAssetId;
+    result.leadPartId = leadResult.partId;
+  }
+
+  // Generate Rhythm Guitar MusicXML
+  if (rhythm.length > 0) {
+    const rhythmMidi: MidiLike = {
+      ...baseMidi,
+      tracks: [{ notes: rhythm }],
+    };
+    const rhythmXml = midiToMusicXml(rhythmMidi, songTitle ? `${songTitle} — Rhythm Guitar` : "Rhythm Guitar", "guitar");
+    const rhythmResult: Record<string, unknown> = {};
+    await uploadAndLinkMusicXml(
+      rhythmXml, bandId, arrangementId, "rhythm guitar", rhythmResult, "rhythm-guitar.musicxml",
+      "AI-generated — rhythm guitar (split from guitar stem)"
+    );
+    result.rhythmSheetMusicAssetId = rhythmResult.sheetMusicAssetId;
+    result.rhythmPartId = rhythmResult.partId;
   }
 
   return result;
