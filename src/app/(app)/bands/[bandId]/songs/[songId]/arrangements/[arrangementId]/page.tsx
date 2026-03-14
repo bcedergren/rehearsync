@@ -985,10 +985,42 @@ export default function ArrangementDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasAudio, hasSyncMap, hasSections, isGeneratingSections]);
 
+  // Ensure "Lead Guitar" + "Rhythm Guitar" parts exist when guitar split mode is active.
+  // Replaces a plain "Guitar" part with the two split parts if needed.
+  async function ensureGuitarSplitParts() {
+    if (!arrangement) return;
+    const hasLead = arrangement.parts.some((p) => p.instrumentName.toLowerCase() === "lead guitar");
+    const hasRhythm = arrangement.parts.some((p) => p.instrumentName.toLowerCase() === "rhythm guitar");
+    if (hasLead && hasRhythm) return; // Already split
+
+    // Delete the plain "Guitar" part if it exists
+    const guitarPart = arrangement.parts.find((p) => p.instrumentName.toLowerCase() === "guitar");
+    if (guitarPart) {
+      try {
+        await fetch(`/api/v1/arrangements/${arrangementId}/parts/${guitarPart.id}`, { method: "DELETE" });
+      } catch {
+        // continue — worst case we'll have an extra part
+      }
+    }
+
+    // Create split parts
+    if (!hasLead) {
+      try { await createPartMutation.mutateAsync({ instrumentName: "Lead Guitar", isRequired: true }); } catch { /* continue */ }
+    }
+    if (!hasRhythm) {
+      try { await createPartMutation.mutateAsync({ instrumentName: "Rhythm Guitar", isRequired: true }); } catch { /* continue */ }
+    }
+
+    // Refresh data so the transcription can link to the new parts
+    queryClient.invalidateQueries({ queryKey: ["arrangement", arrangementId] });
+    queryClient.invalidateQueries({ queryKey: ["parts", arrangementId] });
+    queryClient.invalidateQueries({ queryKey: ["readiness", arrangementId] });
+  }
+
   // Stems available for transcription (no charts yet)
   const stemsForTranscription = stems.filter((stem) => {
     if (!stem.stemName) return false;
-    // For guitar in split mode, check both Lead Guitar and Rhythm Guitar parts
+    // For guitar in split mode, check Lead Guitar / Rhythm Guitar parts OR a plain "Guitar" part
     if (stem.stemName.toLowerCase() === "guitar" && guitarSplitMode === "split") {
       const leadPart = arrangement?.parts.find((p) =>
         p.instrumentName.toLowerCase() === "lead guitar"
@@ -996,9 +1028,16 @@ export default function ArrangementDetailPage() {
       const rhythmPart = arrangement?.parts.find((p) =>
         p.instrumentName.toLowerCase() === "rhythm guitar"
       );
-      // Transcribable if either lead or rhythm part needs charts
-      return (leadPart && leadPart.sheetMusicAssets.length === 0) ||
-             (rhythmPart && rhythmPart.sheetMusicAssets.length === 0);
+      // If split parts exist, transcribable if either needs charts
+      if (leadPart || rhythmPart) {
+        return (leadPart && leadPart.sheetMusicAssets.length === 0) ||
+               (rhythmPart && rhythmPart.sheetMusicAssets.length === 0);
+      }
+      // If only a plain "Guitar" part exists, it still needs transcription (we'll split it first)
+      const guitarPart = arrangement?.parts.find((p) =>
+        p.instrumentName.toLowerCase() === "guitar"
+      );
+      return guitarPart != null && guitarPart.sheetMusicAssets.length === 0;
     }
     const matchingPart = arrangement?.parts.find((p) =>
       p.instrumentName.toLowerCase().includes(stem.stemName!.toLowerCase())
@@ -1063,6 +1102,11 @@ export default function ArrangementDetailPage() {
       return;
     autoTranscriptionRef.current = true;
     async function autoTranscribe() {
+      // Ensure split parts exist before auto-transcribing guitar
+      const hasGuitarStem = stemsForTranscription.some((s) => s.stemName?.toLowerCase() === "guitar");
+      if (hasGuitarStem && guitarSplitMode === "split") {
+        await ensureGuitarSplitParts();
+      }
       for (let i = 0; i < stemsForTranscription.length; i++) {
         if (i > 0) await new Promise((r) => setTimeout(r, 12000));
         const stem = stemsForTranscription[i];
@@ -1225,6 +1269,11 @@ export default function ArrangementDetailPage() {
                 </Text>
               </Box>
               <Button size="xs" colorPalette="purple" onClick={async () => {
+                // Ensure split parts exist before starting guitar transcription
+                const hasGuitarStem = stemsForTranscription.some((s) => s.stemName?.toLowerCase() === "guitar");
+                if (hasGuitarStem && guitarSplitMode === "split") {
+                  await ensureGuitarSplitParts();
+                }
                 for (let i = 0; i < stemsForTranscription.length; i++) {
                   if (i > 0) await new Promise((r) => setTimeout(r, 12000));
                   const stem = stemsForTranscription[i];
@@ -1845,6 +1894,11 @@ export default function ArrangementDetailPage() {
                         </Box>
                         <Button size="xs" colorPalette="purple" onClick={async () => {
                           setShowUploadSheet(false);
+                          // Ensure split parts exist before starting guitar transcription
+                          const hasGuitarStem = stemsForTranscription.some((s) => s.stemName?.toLowerCase() === "guitar");
+                          if (hasGuitarStem && guitarSplitMode === "split") {
+                            await ensureGuitarSplitParts();
+                          }
                           for (let i = 0; i < stemsForTranscription.length; i++) {
                             if (i > 0) await new Promise((r) => setTimeout(r, 12000));
                             const stem = stemsForTranscription[i];
