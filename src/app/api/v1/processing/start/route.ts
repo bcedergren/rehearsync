@@ -25,8 +25,8 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
   const { audioAssetId, jobType, guitarMode } = parsed.data;
 
-  // Block transcription jobs when the feature is disabled
-  if (jobType === "transcription" && process.env.NEXT_PUBLIC_TRANSCRIPTION_ENABLED !== "true") {
+  // Kill-switch: set NEXT_PUBLIC_TRANSCRIPTION_ENABLED=false to disable transcription
+  if (jobType === "transcription" && process.env.NEXT_PUBLIC_TRANSCRIPTION_ENABLED === "false") {
     return response.error("feature_disabled", "Transcription is currently unavailable. The AI model is being updated.", 503);
   }
 
