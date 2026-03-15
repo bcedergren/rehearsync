@@ -60,7 +60,7 @@ describe("TIER_LIMITS", () => {
     expect(band.allowMultipleArrangements).toBe(true);
     expect(band.allowSessions).toBe(false);
     expect(band.allowTransportControls).toBe(false);
-    expect(band.allowSyncMaps).toBe(false);
+    expect(band.allowSyncMaps).toBe(true);
   });
 
   it("agent tier unlocks all features", () => {

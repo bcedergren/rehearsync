@@ -42,7 +42,7 @@ export const TIER_LIMITS: Record<Tier, TierLimits> = {
     allowMultipleArrangements: true,
     allowSessions: false,
     allowTransportControls: false,
-    allowSyncMaps: false,
+    allowSyncMaps: true,
     allowAiProcessing: true,
     allowPracticeTools: true,
     maxAudioUploads: Infinity,
