@@ -28,7 +28,7 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
 
 export const MODELS = {
   DEMUCS: "cjwbw/demucs:25a173108cff36ef9f80f854c162d01df9e6528be175794b81158fa03836d953",
-  BASIC_PITCH: "rehearsync/basic-pitch:e1352081a481199b5b6d817602189f62bd159d89e38d90bbcad209de8674994e",
+  BASIC_PITCH: "rehearsync/basic-pitch:80c0b021f3cd1d667f15cd0af7794106742817ae762f437dd49783c9c3e0082a",
   ESSENTIA_BPM: "mtg/essentia-bpm:b3045c359817fea53678791886d50aa3e3a995dc4796fe74db0de156d5074a43",
 } as const;
 
