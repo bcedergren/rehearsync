@@ -748,6 +748,26 @@ export default function ArrangementDetailPage() {
     return closest?.timeMs ?? null;
   }, [syncPoints]);
 
+  // Resolve a timeMs to bar number (find the highest bar whose timeMs ≤ current time)
+  const timeMsToBar = useCallback((timeMs: number): number | null => {
+    if (syncPoints.length === 0) return null;
+    let best: { barNumber: number; timeMs: number } | null = null;
+    for (const p of syncPoints) {
+      if (p.timeMs <= timeMs && (!best || p.barNumber > best.barNumber)) {
+        best = p;
+      }
+    }
+    return best?.barNumber ?? null;
+  }, [syncPoints]);
+
+  // Current bar derived from audio playback position + sync map
+  const [currentBar, setCurrentBar] = useState<number | null>(null);
+
+  const handlePositionChange = useCallback((ms: number) => {
+    const bar = timeMsToBar(ms);
+    setCurrentBar((prev) => (bar !== prev ? bar : prev));
+  }, [timeMsToBar]);
+
   // Memoize audio tracks to prevent unnecessary AudioPlayer re-renders
   const audioTracks = useMemo(() => {
     if (!arrangement) return [];
@@ -1814,6 +1834,7 @@ export default function ArrangementDetailPage() {
                 <AudioPlayer
                   tracks={audioTracks}
                   seekTo={audioSeekTo}
+                  onPositionChange={handlePositionChange}
                   allowPracticeTools={allowPracticeTools}
                   tempoPercent={tempoPercent}
                   onTempoChange={setTempoPercent}
@@ -2506,6 +2527,7 @@ export default function ArrangementDetailPage() {
                   fileType={previewAsset.fileType as "pdf" | "musicxml"}
                   fileName={previewAsset.fileName}
                   transposeSemitones={pitchSemitones}
+                  currentBar={currentBar}
                 />
               )}
             </Dialog.Body>
