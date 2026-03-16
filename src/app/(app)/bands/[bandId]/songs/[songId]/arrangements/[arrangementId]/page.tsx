@@ -1055,11 +1055,11 @@ export default function ArrangementDetailPage() {
     const hasRhythm = arrangement.parts.some((p) => p.instrumentName.toLowerCase() === "rhythm guitar");
     if (hasLead && hasRhythm) return; // Already split
 
-    // Delete the plain "Guitar" part if it exists
+    // Delete the plain "Guitar" part if it exists (force removes assignments + sheet music)
     const guitarPart = arrangement.parts.find((p) => p.instrumentName.toLowerCase() === "guitar");
     if (guitarPart) {
       try {
-        await fetch(`/api/v1/arrangements/${arrangementId}/parts/${guitarPart.id}`, { method: "DELETE" });
+        await fetch(`/api/v1/arrangements/${arrangementId}/parts/${guitarPart.id}?force=true`, { method: "DELETE" });
       } catch {
         // continue — worst case we'll have an extra part
       }

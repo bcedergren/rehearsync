@@ -19,8 +19,9 @@ export const PATCH = withAuth(async (req: NextRequest, ctx, params) => {
   return response.ok(part);
 });
 
-export const DELETE = withAuth(async (_req, ctx, params) => {
+export const DELETE = withAuth(async (req: NextRequest, ctx, params) => {
   await checkFreeTierLock(ctx.userId, { partId: params.partId });
-  await partService.deletePart(params.partId);
+  const force = req.nextUrl.searchParams.get("force") === "true";
+  await partService.deletePart(params.partId, force);
   return response.ok({ deleted: true });
 });

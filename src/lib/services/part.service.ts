@@ -37,7 +37,7 @@ export async function updatePart(partId: string, data: UpdatePartInput) {
   return prisma.part.update({ where: { id: partId }, data });
 }
 
-export async function deletePart(partId: string) {
+export async function deletePart(partId: string, force = false) {
   const part = await prisma.part.findUnique({
     where: { id: partId },
     include: {
@@ -48,11 +48,12 @@ export async function deletePart(partId: string) {
   });
   if (!part) throw new NotFoundError("Part", partId);
 
-  if (part._count.sheetMusicAssets > 0 || part._count.assignments > 0) {
+  if (!force && (part._count.sheetMusicAssets > 0 || part._count.assignments > 0)) {
     throw new InvalidStateError(
       "Cannot delete a part that has active assets or assignments"
     );
   }
 
+  // Cascade in schema handles deleting related assignments and sheet music assets
   return prisma.part.delete({ where: { id: partId } });
 }
