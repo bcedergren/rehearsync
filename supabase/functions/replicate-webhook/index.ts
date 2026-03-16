@@ -401,6 +401,127 @@ async function handleBeatDetection(
   };
 }
 
+// ─── Whisper Lyrics Transcription ────────────────────────────
+
+interface WhisperWord {
+  word: string;
+  start: number;
+  end: number;
+}
+
+/**
+ * Transcribe lyrics from a vocals audio file using OpenAI Whisper API.
+ * Returns word-level timestamps, or empty array on failure.
+ */
+async function transcribeLyrics(audioUrl: string): Promise<WhisperWord[]> {
+  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+  if (!OPENAI_API_KEY) {
+    console.warn("[lyrics] OPENAI_API_KEY not set, skipping lyrics");
+    return [];
+  }
+
+  try {
+    // Download audio
+    const audioResponse = await fetch(audioUrl);
+    if (!audioResponse.ok) {
+      console.warn(`[lyrics] Failed to download audio: ${audioResponse.status}`);
+      return [];
+    }
+    const audioBytes = await audioResponse.arrayBuffer();
+
+    // 25MB limit for Whisper API
+    if (audioBytes.byteLength > 25 * 1024 * 1024) {
+      console.warn("[lyrics] Audio too large for Whisper (>25MB), skipping lyrics");
+      return [];
+    }
+
+    const formData = new FormData();
+    formData.append("file", new Blob([audioBytes], { type: "audio/mpeg" }), "vocals.mp3");
+    formData.append("model", "whisper-1");
+    formData.append("response_format", "verbose_json");
+    formData.append("timestamp_granularities[]", "word");
+
+    const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
+      body: formData,
+    });
+
+    if (!res.ok) {
+      console.warn(`[lyrics] Whisper API error: ${res.status}`);
+      return [];
+    }
+
+    const data = await res.json();
+    const words: WhisperWord[] = (data.words ?? []).map(
+      (w: { word: string; start: number; end: number }) => ({
+        word: w.word.trim(),
+        start: w.start,
+        end: w.end,
+      })
+    );
+
+    console.log(`[lyrics] Whisper transcribed ${words.length} words`);
+    return words;
+  } catch (err) {
+    console.warn("[lyrics] Whisper transcription failed:", err);
+    return [];
+  }
+}
+
+/**
+ * Align Whisper words to MIDI notes by timestamp proximity.
+ * Notes are pre-sorted by time. Chord notes (simultaneous with the previous note)
+ * are skipped to match the non-chord index used by the MusicXML renderer.
+ * Returns a Map of nonChordNoteIndex → lyric text.
+ */
+function alignLyricsToNotes(
+  words: WhisperWord[],
+  notes: { time: number }[]
+): Map<number, string> {
+  const lyrics = new Map<number, string>();
+  if (words.length === 0 || notes.length === 0) return lyrics;
+
+  // Build list of non-chord note indices and their times (matching globalNoteIdx in renderer)
+  const nonChordNotes: { idx: number; time: number }[] = [];
+  for (let i = 0; i < notes.length; i++) {
+    const isChord = i > 0 && Math.abs(notes[i].time - notes[i - 1].time) < 0.02;
+    if (!isChord) {
+      nonChordNotes.push({ idx: nonChordNotes.length, time: notes[i].time });
+    }
+  }
+
+  const TOLERANCE = 0.3; // seconds — max distance between word and note onset
+  let searchStart = 0;
+
+  for (const word of words) {
+    // Advance search start to the closest note at or after this word
+    while (searchStart < nonChordNotes.length - 1 && nonChordNotes[searchStart].time < word.start - TOLERANCE) {
+      searchStart++;
+    }
+
+    // Find the best matching note within tolerance
+    let bestIdx = -1;
+    let bestDist = Infinity;
+    for (let j = Math.max(0, searchStart - 1); j < Math.min(nonChordNotes.length, searchStart + 3); j++) {
+      const dist = Math.abs(nonChordNotes[j].time - word.start);
+      if (dist < bestDist && dist <= TOLERANCE) {
+        bestDist = dist;
+        bestIdx = nonChordNotes[j].idx;
+      }
+    }
+
+    if (bestIdx >= 0) {
+      // Append to existing lyric if multiple words map to same note
+      const existing = lyrics.get(bestIdx);
+      lyrics.set(bestIdx, existing ? `${existing} ${word.word}` : word.word);
+    }
+  }
+
+  console.log(`[lyrics] Aligned ${lyrics.size} lyrics to ${nonChordNotes.length} non-chord notes`);
+  return lyrics;
+}
+
 // ─── MIDI → MusicXML Converter (deterministic, no LLM) ─────
 
 const NOTE_NAMES = ["C", "C", "D", "D", "E", "F", "F", "G", "G", "A", "A", "B"];
@@ -459,7 +580,7 @@ function isDualStaff(stemName?: string | null): boolean {
   return s === "guitar" || s === "bass";
 }
 
-function midiToMusicXml(midi: MidiLike, title?: string, stemName?: string | null): string {
+function midiToMusicXml(midi: MidiLike, title?: string, stemName?: string | null, lyrics?: Map<number, string>): string {
   const mode = stemToNotationMode(stemName);
   const dualStaff = isDualStaff(stemName);
 
@@ -687,6 +808,9 @@ function midiToMusicXml(midi: MidiLike, title?: string, stemName?: string | null
     return "";
   }
 
+  // Global note index counter for lyrics alignment (tracks position across all measures)
+  let globalNoteIdx = 0;
+
   /** Render notes for a single staff within a measure. Returns { xml, forwardDuration } */
   function renderMeasureNotes(
     notes: typeof allNotes,
@@ -732,9 +856,20 @@ function midiToMusicXml(midi: MidiLike, title?: string, stemName?: string | null
       if (dot) xml += `<dot/>`;
       xml += staffTag;
       xml += noteNotationsXml(note.midi, forTab);
+
+      // Add lyrics if available for this note
+      if (lyrics && !isChord && !forTab) {
+        const lyricText = lyrics.get(globalNoteIdx);
+        if (lyricText) {
+          const escaped = lyricText.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+          xml += `<lyric number="1"><syllabic>single</syllabic><text>${escaped}</text></lyric>`;
+        }
+      }
+
       xml += `</note>`;
 
       if (!isChord) {
+        globalNoteIdx++;
         cursor += finalDur;
       }
     }
@@ -1057,10 +1192,41 @@ async function handleTranscription(
     );
   }
 
+  // ─── Lyrics transcription for vocals ───
+  let lyricsMap: Map<number, string> | undefined;
+  if (stemName?.toLowerCase() === "vocals" && allNotes.length > 0) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const audioStorageObj = (job as any).audio_assets?.storage_objects;
+      if (audioStorageObj?.object_key) {
+        const { data: signedUrlData } = await supabase.storage
+          .from(STORAGE_BUCKET)
+          .createSignedUrl(audioStorageObj.object_key, 300);
+        if (signedUrlData?.signedUrl) {
+          const words = await transcribeLyrics(signedUrlData.signedUrl);
+          if (words.length > 0) {
+            // allNotes is already sorted by time in handleTranscription (via midi.tracks.flatMap)
+            // but we need the same sort order as midiToMusicXml uses internally
+            const sortedForAlignment = [...allNotes].sort((a, b) => a.time - b.time || a.midi - b.midi);
+            lyricsMap = alignLyricsToNotes(words, sortedForAlignment);
+            result.lyricsWordCount = words.length;
+            result.lyricsAlignedCount = lyricsMap.size;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("[transcription] Lyrics transcription failed, continuing without:", err);
+    }
+  }
+
   // ─── Standard (merged) transcription ───
+  // For vocals with lyrics, always use local converter (lyrics can't be injected into music21 output)
   let musicXmlContent = "";
   try {
-    if (musicxmlUrl) {
+    if (lyricsMap && lyricsMap.size > 0) {
+      console.log("Using local MIDI → MusicXML conversion with lyrics");
+      musicXmlContent = midiToMusicXml(midi, songTitle, stemName, lyricsMap);
+    } else if (musicxmlUrl) {
       console.log("Using music21-generated MusicXML from Replicate");
       const xmlResponse = await fetch(musicxmlUrl);
       if (!xmlResponse.ok) {
