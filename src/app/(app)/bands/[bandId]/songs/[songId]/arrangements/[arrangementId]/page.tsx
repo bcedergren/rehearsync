@@ -811,7 +811,7 @@ export default function ArrangementDetailPage() {
   // Auto-trigger beat detection when full mix exists and no sync map yet
   const autoBeatDetectionRef = useRef(false);
   useEffect(() => {
-    if (!fullMix || hasSyncMap || isBeatProcessing || autoBeatDetectionRef.current || !allowSyncMaps) return;
+    if (!fullMix || hasSyncMap || isBeatProcessing || autoBeatDetectionRef.current) return;
     autoBeatDetectionRef.current = true;
     startBeatDetection(fullMix.id, "beat_detection");
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1390,10 +1390,7 @@ export default function ArrangementDetailPage() {
     const showBeatButton = fullMix && !hasSyncMap && !isBeatProcessing && !beatProcessingError;
     return (
       <VStack align="stretch" gap={2}>
-        {!allowSyncMaps && fullMix && (
-          renderUpgradePrompt("Sync map editor")
-        )}
-        {allowSyncMaps && showBeatButton && (
+        {showBeatButton && (
           <Flex align="center" gap={2} p={3} borderRadius="md" bg="purple.50" border="1px solid" borderColor="purple.100">
             <Box flex={1}>
               <Flex align="center" gap={1.5}>
