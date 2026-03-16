@@ -374,15 +374,22 @@ async function handleBeatDetection(
     });
   }
 
-  // Insert in batches of 100
-  for (let i = 0; i < points.length; i += 100) {
-    const batch = points.slice(i, i + 100);
-    const { error: pointsError } = await supabase
-      .from("sync_map_points")
-      .insert(batch);
-    if (pointsError) {
-      throw new Error(`Failed to create sync map points: ${pointsError.message}`);
+  // Insert in batches of 100 — clean up sync map if any batch fails
+  try {
+    for (let i = 0; i < points.length; i += 100) {
+      const batch = points.slice(i, i + 100);
+      const { error: pointsError } = await supabase
+        .from("sync_map_points")
+        .insert(batch);
+      if (pointsError) {
+        throw new Error(`Failed to create sync map points: ${pointsError.message}`);
+      }
     }
+  } catch (err) {
+    // Clean up partial data — delete any inserted points and the sync map
+    await supabase.from("sync_map_points").delete().eq("sync_map_id", syncMap.id);
+    await supabase.from("sync_maps").delete().eq("id", syncMap.id);
+    throw err;
   }
 
   return {
@@ -1135,7 +1142,8 @@ async function uploadAndLinkMusicXml(
     partId = matchingPart?.id ?? null;
   }
 
-  if (!partId) {
+  if (!partId && !partMatchName) {
+    // Only fall back to first part when no stem name was provided (unknown instrument)
     const { data: anyPart } = await supabase
       .from("parts")
       .select("id")
@@ -1145,6 +1153,10 @@ async function uploadAndLinkMusicXml(
       .single();
 
     partId = anyPart?.id ?? null;
+  }
+
+  if (!partId && partMatchName) {
+    console.warn(`[webhook] No part matching "${partMatchName}" found for arrangement ${arrangementId} — sheet music will be created but not linked to a part`);
   }
 
   if (partId) {

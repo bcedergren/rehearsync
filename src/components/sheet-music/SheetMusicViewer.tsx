@@ -211,17 +211,33 @@ function MusicXmlViewer({
     }
   }, [isFullscreen, loading]);
 
+  // Track cursor position to avoid resetting from bar 1 on every change
+  const cursorBarRef = useRef(0);
+
   useEffect(() => {
     if (!osmdRef.current || currentBar == null) return;
 
     const cursor = osmdRef.current.cursor;
     if (!cursor) return;
 
-    cursor.reset();
-    for (let i = 1; i < currentBar; i++) {
-      cursor.next();
-      if (cursor.Iterator.EndReached) break;
+    const prevBar = cursorBarRef.current;
+
+    if (currentBar <= prevBar || prevBar === 0) {
+      // Going backwards or first time — reset and advance from start
+      cursor.reset();
+      for (let i = 1; i < currentBar; i++) {
+        cursor.next();
+        if (cursor.Iterator.EndReached) break;
+      }
+    } else {
+      // Going forward — advance from current position
+      for (let i = prevBar; i < currentBar; i++) {
+        cursor.next();
+        if (cursor.Iterator.EndReached) break;
+      }
     }
+
+    cursorBarRef.current = currentBar;
     cursor.show();
   }, [currentBar]);
 

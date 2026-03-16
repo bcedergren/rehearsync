@@ -319,24 +319,49 @@ export default function ArrangementDetailPage() {
     }
   );
 
+  // Extract audio duration from a File using Web Audio API
+  async function getAudioDurationMs(file: File): Promise<number | undefined> {
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const audioCtx = new AudioContext();
+      const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+      const durationMs = Math.round(audioBuffer.duration * 1000);
+      await audioCtx.close();
+      return durationMs;
+    } catch {
+      return undefined;
+    }
+  }
+
   async function handleAudioSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!audioFile) return;
-    const storageObjectId = await uploadAudio(audioFile, bandId, "audio");
+    const [storageObjectId, durationMs] = await Promise.all([
+      uploadAudio(audioFile, bandId, "audio"),
+      getAudioDurationMs(audioFile),
+    ]);
     if (!storageObjectId) return;
     createAudioAsset.mutate({
       storageObjectId,
       assetRole,
       ...(assetRole === "stem" && stemName ? { stemName } : {}),
+      ...(durationMs ? { durationMs } : {}),
     });
   }
 
   // Inline drag-and-drop: upload directly as full_mix (skips modal for first upload)
   async function handleInlineDrop(file: File) {
     setAudioFile(file);
-    const storageObjectId = await uploadAudio(file, bandId, "audio");
+    const [storageObjectId, durationMs] = await Promise.all([
+      uploadAudio(file, bandId, "audio"),
+      getAudioDurationMs(file),
+    ]);
     if (!storageObjectId) return;
-    createAudioAsset.mutate({ storageObjectId, assetRole: "full_mix" });
+    createAudioAsset.mutate({
+      storageObjectId,
+      assetRole: "full_mix",
+      ...(durationMs ? { durationMs } : {}),
+    });
   }
 
   // AI Processing state
@@ -727,38 +752,46 @@ export default function ArrangementDetailPage() {
   const hasSyncMap = readiness?.checks.activeSyncMapPresent ?? false;
 
   // Build sorted sync map points for bar → timeMs lookup
-  const syncPoints = useMemo(() => {
+  // Pre-sort sync points by timeMs for efficient binary search
+  const syncPointsByTime = useMemo(() => {
     const activeSyncMap = arrangement?.syncMaps?.[0];
-    return activeSyncMap?.points ?? [];
+    const pts = [...(activeSyncMap?.points ?? [])];
+    pts.sort((a, b) => a.timeMs - b.timeMs);
+    return pts;
   }, [arrangement?.syncMaps]);
 
-  // Resolve a bar number to timeMs (exact match or closest bar ≤ target)
-  const barToTimeMs = useCallback((bar: number): number | null => {
-    if (syncPoints.length === 0) return null;
-    // Exact match first
-    const exact = syncPoints.find((p) => p.barNumber === bar);
-    if (exact) return exact.timeMs;
-    // Find closest bar ≤ target
-    let closest: { barNumber: number; timeMs: number } | null = null;
-    for (const p of syncPoints) {
-      if (p.barNumber <= bar && (!closest || p.barNumber > closest.barNumber)) {
-        closest = p;
-      }
-    }
-    return closest?.timeMs ?? null;
-  }, [syncPoints]);
+  // Also keep bar-sorted version for barToTimeMs lookups
+  const syncPointsByBar = useMemo(() => {
+    const pts = [...syncPointsByTime];
+    pts.sort((a, b) => a.barNumber - b.barNumber);
+    return pts;
+  }, [syncPointsByTime]);
 
-  // Resolve a timeMs to bar number (find the highest bar whose timeMs ≤ current time)
-  const timeMsToBar = useCallback((timeMs: number): number | null => {
-    if (syncPoints.length === 0) return null;
-    let best: { barNumber: number; timeMs: number } | null = null;
-    for (const p of syncPoints) {
-      if (p.timeMs <= timeMs && (!best || p.barNumber > best.barNumber)) {
-        best = p;
-      }
+  // Resolve a bar number to timeMs (binary search)
+  const barToTimeMs = useCallback((bar: number): number | null => {
+    const pts = syncPointsByBar;
+    if (pts.length === 0) return null;
+    let lo = 0, hi = pts.length - 1, best = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (pts[mid].barNumber <= bar) { best = mid; lo = mid + 1; }
+      else hi = mid - 1;
     }
-    return best?.barNumber ?? null;
-  }, [syncPoints]);
+    return best >= 0 ? pts[best].timeMs : null;
+  }, [syncPointsByBar]);
+
+  // Resolve a timeMs to bar number (binary search — find highest bar whose timeMs ≤ current time)
+  const timeMsToBar = useCallback((timeMs: number): number | null => {
+    const pts = syncPointsByTime;
+    if (pts.length === 0) return null;
+    let lo = 0, hi = pts.length - 1, best = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (pts[mid].timeMs <= timeMs) { best = mid; lo = mid + 1; }
+      else hi = mid - 1;
+    }
+    return best >= 0 ? pts[best].barNumber : null;
+  }, [syncPointsByTime]);
 
   // Current bar derived from audio playback position + sync map
   const [currentBar, setCurrentBar] = useState<number | null>(null);
@@ -1870,7 +1903,7 @@ export default function ArrangementDetailPage() {
                 ) : (
                   <Flex gap={2} flexWrap="wrap" justify="center">
                     {arrangement.sectionMarkers.map((s) => {
-                      const hasTime = syncPoints.length > 0;
+                      const hasTime = syncPointsByTime.length > 0;
                       return (
                         <Flex
                           key={s.id}
