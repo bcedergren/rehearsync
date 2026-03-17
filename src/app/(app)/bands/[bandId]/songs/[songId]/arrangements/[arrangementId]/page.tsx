@@ -2675,9 +2675,8 @@ export default function ArrangementDetailPage() {
         return (
           <VStack
             position="fixed"
-            top="66px"
-            left="50%"
-            transform="translateX(-50%)"
+            bottom="16px"
+            left="16px"
             zIndex={9998}
             gap={2}
             align="stretch"
