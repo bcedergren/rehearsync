@@ -29,6 +29,7 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
 export const MODELS = {
   DEMUCS: "cjwbw/demucs:25a173108cff36ef9f80f854c162d01df9e6528be175794b81158fa03836d953",
   BASIC_PITCH: "rehearsync/basic-pitch:80c0b021f3cd1d667f15cd0af7794106742817ae762f437dd49783c9c3e0082a",
+  MR_MT3: "rehearsync/mr-mt3:2d0d4e1fbcbbe6e16281c24374c69f548194d1dba2a9554e0b9ba64321c713f6",
   ESSENTIA_BPM: "mtg/essentia-bpm:b3045c359817fea53678791886d50aa3e3a995dc4796fe74db0de156d5074a43",
 } as const;
 
@@ -56,19 +57,12 @@ export async function createStemSeparationPrediction(audioUrl: string) {
 }
 
 export async function createTranscriptionPrediction(audioUrl: string, stemName?: string) {
-  // Only pass stem_name for stems that the model's music21 instrument map supports.
-  // Other stems (vocals, piano, other) can trigger missing instrument errors
-  // (e.g. "module 'music21.instrument' has no attribute 'Cello'").
-  // The webhook's local MIDI→MusicXML converter handles instrument selection for all stems.
-  const safeStemNames = ["guitar", "bass", "drums"];
-  const passStemName = stemName && safeStemNames.includes(stemName.toLowerCase());
-
   return withRetry(() =>
     replicate.predictions.create({
-      version: MODELS.BASIC_PITCH.split(":")[1],
+      version: MODELS.MR_MT3.split(":")[1],
       input: {
         audio_file: audioUrl,
-        ...(passStemName ? { stem_name: stemName } : {}),
+        ...(stemName ? { stem_name: stemName } : {}),
       },
       webhook: getWebhookUrl(),
       webhook_events_filter: ["completed"],
