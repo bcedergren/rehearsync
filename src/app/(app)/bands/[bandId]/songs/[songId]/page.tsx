@@ -50,7 +50,10 @@ export default function SongDetailPage() {
   const [titleDraft, setTitleDraft] = useState("");
   const titleInputRef = useRef<HTMLInputElement>(null);
 
-  const updateSong = useApiMutation<Song, { title: string }>(
+  const [editingArtist, setEditingArtist] = useState(false);
+  const [artistDraft, setArtistDraft] = useState("");
+
+  const updateSong = useApiMutation<Song, { title?: string; artist?: string | null }>(
     `/songs/${songId}`,
     "PATCH",
     { invalidateKeys: [["song", songId]] }
@@ -62,6 +65,14 @@ export default function SongDetailPage() {
       updateSong.mutate({ title: trimmed });
     }
     setEditingTitle(false);
+  };
+
+  const saveArtist = () => {
+    const trimmed = artistDraft.trim();
+    if (trimmed !== (song?.artist ?? "")) {
+      updateSong.mutate({ artist: trimmed || null });
+    }
+    setEditingArtist(false);
   };
 
   const [showCreate, setShowCreate] = useState(false);
@@ -129,10 +140,45 @@ export default function SongDetailPage() {
           </Box>
         </Flex>
       )}
-      {song.artist && (
-        <Text color="gray.500" mb={6}>
-          {song.artist}
-        </Text>
+      {editingArtist ? (
+        <Input
+          value={artistDraft}
+          onChange={(e) => setArtistDraft(e.target.value)}
+          onBlur={saveArtist}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") saveArtist();
+            if (e.key === "Escape") setEditingArtist(false);
+          }}
+          fontSize="sm"
+          color="gray.500"
+          variant="flushed"
+          placeholder="Add artist / composer"
+          mb={6}
+          autoFocus
+        />
+      ) : (
+        <Flex
+          align="center"
+          gap={2}
+          mb={6}
+          cursor="pointer"
+          _hover={{ "& .edit-artist-icon": { opacity: 1 } }}
+          onClick={() => {
+            setArtistDraft(song.artist ?? "");
+            setEditingArtist(true);
+          }}
+        >
+          <Text color="gray.500">
+            {song.artist || "Add artist / composer"}
+          </Text>
+          <Box
+            className="edit-artist-icon"
+            opacity={0}
+            transition="opacity 0.15s"
+          >
+            <Pencil size={14} color="var(--chakra-colors-gray-400)" />
+          </Box>
+        </Flex>
       )}
 
       <Flex justify="space-between" align="center" mb={4}>

@@ -2,7 +2,7 @@ import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-const FROM = process.env.EMAIL_FROM || "RehearSync <noreply@send.rehearsync.com>";
+const FROM = process.env.EMAIL_FROM || "RehearSync <noreply@rehearsync.com>";
 const APP_URL = process.env.NEXTAUTH_URL || "http://localhost:3000";
 
 const LOGO_HEADER = `
@@ -93,7 +93,7 @@ export async function sendBandInviteEmail(
   inviterName: string,
   joinUrl: string
 ) {
-  await resend.emails.send({
+  const result = await resend.emails.send({
     from: FROM,
     to,
     subject: `You're invited to join ${bandName} on RehearSync`,
@@ -117,4 +117,5 @@ export async function sendBandInviteEmail(
       </div>
     `,
   });
+  console.log("[EMAIL] sendBandInviteEmail result:", JSON.stringify(result));
 }

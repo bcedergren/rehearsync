@@ -436,6 +436,11 @@ export default function MembersPage() {
                   </Field.Root>
                 </VStack>
               </form>
+              {inviteMember.error && (
+                <Text color="red.500" fontSize="sm" mt={3}>
+                  {inviteMember.error.message}
+                </Text>
+              )}
             </Dialog.Body>
             <Dialog.Footer>
               <Flex gap={3} w="full">
@@ -447,11 +452,18 @@ export default function MembersPage() {
                   Cancel
                 </Button>
                 <Button
-                  type="submit"
-                  form="invite-form"
                   colorPalette="blue"
                   flex={1}
                   loading={inviteMember.isPending}
+                  disabled={!email || !displayName}
+                  onClick={() => {
+                    inviteMember.mutate({
+                      email,
+                      displayName,
+                      role,
+                      ...(instrument ? { defaultInstrument: instrument } : {}),
+                    });
+                  }}
                 >
                   Invite
                 </Button>
@@ -517,6 +529,11 @@ export default function MembersPage() {
                   </Field.Root>
                 </VStack>
               </form>
+              {updateMember.error && (
+                <Text color="red.500" fontSize="sm" mt={3}>
+                  {updateMember.error.message}
+                </Text>
+              )}
             </Dialog.Body>
             <Dialog.Footer>
               <Flex gap={3} w="full">
@@ -524,15 +541,21 @@ export default function MembersPage() {
                   variant="outline"
                   flex={1}
                   onClick={() => setEditingMember(null)}
-                >
+>
                   Cancel
                 </Button>
                 <Button
-                  type="submit"
-                  form="edit-member-form"
                   colorPalette="blue"
                   flex={1}
                   loading={updateMember.isPending}
+                  disabled={!editDisplayName}
+                  onClick={() => {
+                    updateMember.mutate({
+                      displayName: editDisplayName,
+                      role: editRole,
+                      ...(editInstrument ? { defaultInstrument: editInstrument } : {}),
+                    });
+                  }}
                 >
                   Save Changes
                 </Button>

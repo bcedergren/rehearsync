@@ -30,6 +30,7 @@ export const POST = withBandRole("leader", "admin")(async (req: NextRequest, ctx
   );
 
   // Send invite email if address provided
+  console.log("[INVITE] parsed.data:", JSON.stringify(parsed.data));
   if (parsed.data.email) {
     const [band, member] = await Promise.all([
       prisma.band.findUnique({ where: { id: ctx.bandId }, select: { name: true } }),
@@ -39,7 +40,7 @@ export const POST = withBandRole("leader", "admin")(async (req: NextRequest, ctx
     const appUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
     const joinUrl = `${appUrl}/join/${link.code}`;
 
-    sendBandInviteEmail(
+    await sendBandInviteEmail(
       parsed.data.email,
       band?.name || "a band",
       member?.displayName || "Someone",
