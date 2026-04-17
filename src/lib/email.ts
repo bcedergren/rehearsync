@@ -119,3 +119,34 @@ export async function sendBandInviteEmail(
   });
   console.log("[EMAIL] sendBandInviteEmail result:", JSON.stringify(result));
 }
+
+// ─── Email Verification Email ───────────────────────────────────────
+
+export async function sendVerificationEmail(to: string, token: string) {
+  const verifyUrl = `${APP_URL}/verify-email?token=${encodeURIComponent(token)}`;
+
+  await resend.emails.send({
+    from: FROM,
+    to,
+    subject: "Verify your RehearSync email address",
+    html: `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; padding: 40px 20px;">
+        ${LOGO_HEADER}
+        <h1 style="font-size: 24px; font-weight: 700; color: #1a202c; margin-bottom: 8px;">Verify your email</h1>
+        <p style="font-size: 16px; color: #4a5568; line-height: 1.6;">
+          Thanks for signing up! Please verify your email address to get started with RehearSync.
+        </p>
+        <a href="${verifyUrl}" style="display: inline-block; background: #3182CE; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 14px; margin-top: 16px;">
+          Verify Email Address
+        </a>
+        <p style="font-size: 14px; color: #718096; margin-top: 24px; line-height: 1.6;">
+          This link expires in 24 hours. If you didn't create this account, you can safely ignore this email.
+        </p>
+        <p style="font-size: 12px; color: #a0aec0; margin-top: 32px; word-break: break-all;">
+          Or copy this link: ${verifyUrl}
+        </p>
+        ${EMAIL_FOOTER}
+      </div>
+    `,
+  });
+}
