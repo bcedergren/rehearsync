@@ -100,3 +100,11 @@ export async function updateMember(
 export async function deactivateMember(memberId: string) {
   return prisma.member.update({ where: { id: memberId }, data: { isActive: false } });
 }
+
+export async function deleteBand(bandId: string) {
+  return prisma.band.delete({ where: { id: bandId } });
+}
+
+export async function deleteMember(memberId: string) {
+  return prisma.member.delete({ where: { id: memberId } });
+}

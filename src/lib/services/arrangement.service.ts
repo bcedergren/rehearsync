@@ -176,3 +176,7 @@ export async function getReadiness(arrangementId: string) {
     },
   };
 }
+
+export async function deleteArrangement(arrangementId: string) {
+  return prisma.arrangement.delete({ where: { id: arrangementId } });
+}

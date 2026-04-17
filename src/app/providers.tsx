@@ -4,6 +4,8 @@ import { ChakraProvider, defaultSystem } from "@chakra-ui/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SessionProvider } from "next-auth/react";
 import { useState } from "react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { Toaster } from "@/components/ui/toaster";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -19,10 +21,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <SessionProvider basePath="/api/v1/auth">
-      <QueryClientProvider client={queryClient}>
-        <ChakraProvider value={defaultSystem}>{children}</ChakraProvider>
-      </QueryClientProvider>
-    </SessionProvider>
+    <ErrorBoundary>
+      <SessionProvider basePath="/api/v1/auth">
+        <QueryClientProvider client={queryClient}>
+          <ChakraProvider value={defaultSystem}>
+            {children}
+            <Toaster />
+          </ChakraProvider>
+        </QueryClientProvider>
+      </SessionProvider>
+    </ErrorBoundary>
   );
 }
