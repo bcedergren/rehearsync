@@ -10,6 +10,18 @@ const PORT = parseInt(process.env.WS_PORT || "3001", 10);
 function handleHttpRequest(req: IncomingMessage, res: ServerResponse) {
   const url = new URL(req.url || "", `http://localhost:${PORT}`);
 
+  // GET /health - Health check endpoint
+  if (req.method === "GET" && url.pathname === "/health") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({
+      status: "ok",
+      service: "websocket-server",
+      timestamp: new Date().toISOString(),
+      connections: wss.clients.size,
+    }));
+    return;
+  }
+
   // POST /broadcast - Internal endpoint for API routes to trigger WS broadcasts
   if (req.method === "POST" && url.pathname === "/broadcast") {
     let body = "";
@@ -35,9 +47,9 @@ function handleHttpRequest(req: IncomingMessage, res: ServerResponse) {
     return;
   }
 
-  // Default health check
+  // Default response
   res.writeHead(200, { "Content-Type": "application/json" });
-  res.end(JSON.stringify({ status: "ws-server running" }));
+  res.end(JSON.stringify({ status: "ws-server running", connections: wss.clients.size }));
 }
 
 const server = createServer(handleHttpRequest);
