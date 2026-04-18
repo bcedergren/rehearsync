@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { createSignedDownloadUrl } from "@/lib/supabase-storage";
 import {
   createStemSeparationPrediction,
+  createInstrumentSeparationPrediction,
   createTranscriptionPrediction,
   createBeatDetectionPrediction,
 } from "@/lib/replicate";
@@ -23,7 +24,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     });
   }
 
-  const { audioAssetId, jobType, guitarMode } = parsed.data;
+  const { audioAssetId, jobType, guitarMode, instrument } = parsed.data;
 
   // Kill-switch: set NEXT_PUBLIC_TRANSCRIPTION_ENABLED=false to disable transcription
   if (jobType === "transcription" && process.env.NEXT_PUBLIC_TRANSCRIPTION_ENABLED === "false") {
@@ -50,6 +51,20 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     );
   }
 
+  // For instrument separation, require a stem asset and an instrument name
+  if (jobType === "instrument_separation") {
+    if (audioAsset.assetRole !== "stem") {
+      return response.validationError(
+        "Instrument separation requires a stem audio asset"
+      );
+    }
+    if (!instrument) {
+      return response.validationError(
+        "Instrument separation requires an instrument name"
+      );
+    }
+  }
+
   // Check for existing running job of same type for this asset
   const existingJob = await prisma.processingJob.findFirst({
     where: {
@@ -66,6 +81,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
   // Create the processing job
   const inputPayload: Record<string, unknown> = {};
   if (guitarMode) inputPayload.guitarMode = guitarMode;
+  if (instrument) inputPayload.instrument = instrument;
 
   const job = await processingService.createJob(
     audioAsset.arrangementId,
@@ -86,6 +102,9 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     switch (jobType) {
       case "stem_separation":
         prediction = await createStemSeparationPrediction(audioUrl);
+        break;
+      case "instrument_separation":
+        prediction = await createInstrumentSeparationPrediction(audioUrl, instrument!);
         break;
       case "transcription":
         prediction = await createTranscriptionPrediction(audioUrl, audioAsset.stemName ?? undefined);

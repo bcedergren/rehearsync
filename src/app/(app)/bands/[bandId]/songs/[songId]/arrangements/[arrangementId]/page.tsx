@@ -492,8 +492,8 @@ export default function ArrangementDetailPage() {
     if (p.includes(m) || m.includes(p)) return true;
     // Common aliases
     const aliases: Record<string, string[]> = {
-      guitar: ["electric guitar", "acoustic guitar", "lead guitar", "rhythm guitar", "gtr"],
-      bass: ["bass guitar", "electric bass"],
+      guitar: ["electric guitar", "acoustic guitar", "clean electric guitar", "distorted electric guitar", "lead guitar", "rhythm guitar", "gtr"],
+      bass: ["bass guitar", "bass synthesizer", "electric bass"],
       drums: ["drum", "percussion", "drummer"],
       vocals: ["voice", "singer", "vocal", "lead vocals", "backing vocals"],
       piano: ["keys", "keyboard", "synth", "synthesizer"],
@@ -858,10 +858,22 @@ export default function ArrangementDetailPage() {
 
     async function autoCreateParts() {
       const createdParts: { id: string; instrumentName: string }[] = [];
+      const stemNames = stems.map((s) => s.stemName?.toLowerCase() ?? "");
+      // Skip parent "guitar"/"bass" stems when sub-stems exist
+      const hasGuitarSubStems = stemNames.some((n) =>
+        ["acoustic_guitar", "clean_electric_guitar", "distorted_electric_guitar"].includes(n)
+      );
+      const hasBassSubStems = stemNames.some((n) =>
+        ["bass_guitar", "bass_synthesizer"].includes(n)
+      );
       for (const stem of stems) {
         if (!stem.stemName) continue;
-        // Split guitar into Lead Guitar + Rhythm Guitar
-        if (stem.stemName.toLowerCase() === "guitar") {
+        const name = stem.stemName.toLowerCase();
+        // Skip parent stems when sub-stems exist
+        if (name === "guitar" && hasGuitarSubStems) continue;
+        if (name === "bass" && hasBassSubStems) continue;
+        // Split guitar into Lead Guitar + Rhythm Guitar (only when no sub-stems)
+        if (name === "guitar") {
           for (const prefix of ["Lead", "Rhythm"]) {
             try {
               const part = await createPartMutation.mutateAsync({
@@ -875,7 +887,11 @@ export default function ArrangementDetailPage() {
           }
           continue;
         }
-        const instrumentName = stem.stemName.charAt(0).toUpperCase() + stem.stemName.slice(1);
+        // Format sub-stem names: "acoustic_guitar" → "Acoustic Guitar"
+        const instrumentName = stem.stemName
+          .split("_")
+          .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+          .join(" ");
         try {
           const part = await createPartMutation.mutateAsync({
             instrumentName,

@@ -259,6 +259,198 @@ async function handleStemSeparation(
   return createdStems;
 }
 
+// ─── Instrument Separation Handler ──────────────────────────────
+
+// Guitar sub-instruments to extract from the Demucs "guitar" stem
+const GUITAR_INSTRUMENTS = [
+  "acoustic_guitar",
+  "clean_electric_guitar",
+  "distorted_electric_guitar",
+] as const;
+
+// Bass sub-instruments to extract from the Demucs "bass" stem
+const BASS_INSTRUMENTS = [
+  "bass_guitar",
+  "bass_synthesizer",
+] as const;
+
+async function handleInstrumentSeparation(
+  job: Record<string, unknown>,
+  output: unknown
+) {
+  const arrangementId = job.arrangement_id as string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const bandId = (job as any).arrangements?.songs?.band_id;
+  const inputPayload = job.input_payload as Record<string, unknown> | null;
+  const instrument = inputPayload?.instrument as string;
+
+  if (!bandId) {
+    throw new Error("Could not determine bandId from job");
+  }
+
+  if (!instrument) {
+    throw new Error("No instrument specified in job input_payload");
+  }
+
+  // Banquet returns a single URL to the separated WAV file
+  const outputUrl = typeof output === "string" ? output : null;
+  if (!outputUrl) {
+    throw new Error("No output URL returned from Banquet");
+  }
+
+  // Download the separated stem
+  const stemResponse = await fetch(outputUrl);
+  if (!stemResponse.ok) {
+    throw new Error(`Failed to download ${instrument} stem: ${stemResponse.status}`);
+  }
+
+  const stemData = await stemResponse.arrayBuffer();
+  const stemId = crypto.randomUUID();
+  const objectKey = `bands/${bandId}/audio/${stemId}.wav`;
+
+  // Upload to Supabase Storage
+  const { error: uploadError } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(objectKey, stemData, {
+      contentType: "audio/wav",
+      upsert: false,
+    });
+
+  if (uploadError) {
+    throw new Error(`Failed to upload ${instrument} stem: ${uploadError.message}`);
+  }
+
+  // Create DB records
+  const storageObjectId = await createStorageObject(
+    STORAGE_BUCKET,
+    objectKey,
+    `${instrument}.wav`,
+    "audio/wav",
+    stemData.byteLength
+  );
+
+  const assetId = await createAudioAsset(
+    arrangementId,
+    storageObjectId,
+    "stem",
+    instrument
+  );
+
+  return { instrument, assetId };
+}
+
+/**
+ * Auto-trigger instrument separation for guitar and bass stems
+ * after Demucs stem separation completes.
+ */
+async function triggerInstrumentSeparation(
+  arrangementId: string,
+  createdStems: Record<string, string>
+) {
+  const REPLICATE_API_TOKEN = Deno.env.get("REPLICATE_API_TOKEN");
+  if (!REPLICATE_API_TOKEN) {
+    console.warn("[instrument-sep] REPLICATE_API_TOKEN not set, skipping");
+    return;
+  }
+
+  const BANQUET_VERSION = "056d481cb072c2089fef89eab6578e9b47b7da9d8f4fd1dfbf74173fac06a85b";
+  const webhookUrl = `${SUPABASE_URL}/functions/v1/replicate-webhook`;
+
+  // Map stem names to the sub-instruments to extract
+  const stemInstruments: Record<string, readonly string[]> = {
+    guitar: GUITAR_INSTRUMENTS,
+    bass: BASS_INSTRUMENTS,
+  };
+
+  for (const [stemName, instruments] of Object.entries(stemInstruments)) {
+    const stemAssetId = createdStems[stemName];
+    if (!stemAssetId) continue;
+
+    // Get a signed URL for the stem audio
+    const { data: asset } = await supabase
+      .from("audio_assets")
+      .select("storage_objects!storage_object_id ( bucket, object_key )")
+      .eq("id", stemAssetId)
+      .single();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const storageObj = (asset as any)?.storage_objects;
+    if (!storageObj) {
+      console.error(`[instrument-sep] No storage object for ${stemName} asset ${stemAssetId}`);
+      continue;
+    }
+
+    const { data: signedUrlData } = await supabase.storage
+      .from(storageObj.bucket)
+      .createSignedUrl(storageObj.object_key, 7200);
+
+    if (!signedUrlData?.signedUrl) {
+      console.error(`[instrument-sep] Failed to create signed URL for ${stemName}`);
+      continue;
+    }
+
+    for (const instrument of instruments) {
+      try {
+        // Create processing job in DB
+        const jobId = crypto.randomUUID();
+        const { error: jobError } = await supabase
+          .from("processing_jobs")
+          .insert({
+            id: jobId,
+            arrangement_id: arrangementId,
+            audio_asset_id: stemAssetId,
+            job_type: "instrument_separation",
+            status: "pending",
+            input_payload: { instrument },
+          });
+
+        if (jobError) {
+          console.error(`[instrument-sep] Failed to create job for ${instrument}:`, jobError);
+          continue;
+        }
+
+        // Call Replicate API directly
+        const predictionResp = await fetch("https://api.replicate.com/v1/predictions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${REPLICATE_API_TOKEN}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            version: BANQUET_VERSION,
+            input: {
+              audio_file: signedUrlData.signedUrl,
+              instrument,
+            },
+            webhook: webhookUrl,
+            webhook_events_filter: ["completed"],
+          }),
+        });
+
+        if (!predictionResp.ok) {
+          const errText = await predictionResp.text();
+          console.error(`[instrument-sep] Replicate API error for ${instrument}:`, errText);
+          await supabase
+            .from("processing_jobs")
+            .update({ status: "failed", error_message: `Replicate API error: ${predictionResp.status}`, completed_at: new Date().toISOString() })
+            .eq("id", jobId);
+          continue;
+        }
+
+        const prediction = await predictionResp.json();
+        await supabase
+          .from("processing_jobs")
+          .update({ status: "running", external_id: prediction.id, started_at: new Date().toISOString() })
+          .eq("id", jobId);
+
+        console.log(`[instrument-sep] Started ${instrument} separation: prediction=${prediction.id}`);
+      } catch (err) {
+        console.error(`[instrument-sep] Error triggering ${instrument}:`, err);
+      }
+    }
+  }
+}
+
 // ─── Beat Detection Handler ─────────────────────────────────────
 
 async function handleBeatDetection(
@@ -1489,6 +1681,19 @@ Deno.serve(async (req: Request) => {
             job,
             output as Record<string, string>
           );
+          // Auto-trigger instrument separation for guitar/bass sub-stems
+          try {
+            await triggerInstrumentSeparation(
+              job.arrangement_id as string,
+              result as Record<string, string>
+            );
+          } catch (triggerErr) {
+            console.error("[instrument-sep] Auto-trigger failed:", triggerErr);
+            // Don't fail the stem separation job if auto-trigger fails
+          }
+          break;
+        case "instrument_separation":
+          result = await handleInstrumentSeparation(job, output);
           break;
         case "transcription":
           result = await handleTranscription(job, output);

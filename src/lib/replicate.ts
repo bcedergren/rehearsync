@@ -31,6 +31,7 @@ export const MODELS = {
   BASIC_PITCH: "rehearsync/basic-pitch:80c0b021f3cd1d667f15cd0af7794106742817ae762f437dd49783c9c3e0082a",
   MR_MT3: "rehearsync/mr-mt3:2d0d4e1fbcbbe6e16281c24374c69f548194d1dba2a9554e0b9ba64321c713f6",
   ESSENTIA_BPM: "mtg/essentia-bpm:b3045c359817fea53678791886d50aa3e3a995dc4796fe74db0de156d5074a43",
+  BANQUET: "rehearsync/banquet:056d481cb072c2089fef89eab6578e9b47b7da9d8f4fd1dfbf74173fac06a85b",
 } as const;
 
 function getWebhookUrl(): string {
@@ -59,7 +60,7 @@ export async function createStemSeparationPrediction(audioUrl: string) {
 export async function createTranscriptionPrediction(audioUrl: string, stemName?: string) {
   return withRetry(() =>
     replicate.predictions.create({
-      version: MODELS.MR_MT3.split(":")[1],
+      version: MODELS.BASIC_PITCH.split(":")[1],
       input: {
         audio_file: audioUrl,
         ...(stemName ? { stem_name: stemName } : {}),
@@ -77,6 +78,23 @@ export async function createBeatDetectionPrediction(audioUrl: string) {
       input: {
         audio: audioUrl,
         algo_type: "deepsquare-k16",
+      },
+      webhook: getWebhookUrl(),
+      webhook_events_filter: ["completed"],
+    })
+  );
+}
+
+export async function createInstrumentSeparationPrediction(
+  audioUrl: string,
+  instrument: string
+) {
+  return withRetry(() =>
+    replicate.predictions.create({
+      version: MODELS.BANQUET.split(":")[1],
+      input: {
+        audio_file: audioUrl,
+        instrument,
       },
       webhook: getWebhookUrl(),
       webhook_events_filter: ["completed"],

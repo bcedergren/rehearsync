@@ -8,7 +8,7 @@ describe("processingJobTypes", () => {
     expect(processingJobTypes).toContain("stem_separation");
     expect(processingJobTypes).toContain("transcription");
     expect(processingJobTypes).toContain("beat_detection");
-    expect(processingJobTypes).toHaveLength(3);
+    expect(processingJobTypes).toHaveLength(4);
   });
 });
 

@@ -103,16 +103,8 @@ const TrackRow = memo(function TrackRow({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const wsRef = useRef<any>(null);
 
-  // Compute effective volume
+  // Compute effective mute (for visual opacity only — parent manages audio.volume)
   const effectivelyMuted = muted || (anySoloed && !soloed);
-  const effectiveVolume = effectivelyMuted ? 0 : volume / 100;
-
-  // Keep audio element volume in sync
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = effectiveVolume;
-    }
-  }, [effectiveVolume, audioRef]);
 
   // Report duration
   useEffect(() => {
@@ -352,9 +344,8 @@ export function AudioPlayer({
 
   // Tracks container ref + waveform area measurements for unified playhead
   const tracksContainerRef = useRef<HTMLDivElement | null>(null);
-  const waveformLeftRef = useRef(0);
-  const waveformWidthRef = useRef(0);
-  const [waveformMeasured, setWaveformMeasured] = useState(false);
+  const [waveformLeft, setWaveformLeft] = useState(0);
+  const [waveformWidth, setWaveformWidth] = useState(0);
 
   // Audio element refs — one per track
   const audioRefsMap = useRef<Map<string, HTMLAudioElement>>(new Map());
@@ -393,9 +384,8 @@ export function AudioPlayer({
       if (!waveformEl) return;
       const containerRect = container.getBoundingClientRect();
       const waveRect = waveformEl.getBoundingClientRect();
-      waveformLeftRef.current = waveRect.left - containerRect.left;
-      waveformWidthRef.current = waveRect.width;
-      setWaveformMeasured(waveRect.width > 0);
+      setWaveformLeft(waveRect.left - containerRect.left);
+      setWaveformWidth(waveRect.width);
     };
 
     // Delay initial measurement to ensure children are rendered
@@ -555,8 +545,9 @@ export function AudioPlayer({
     return () => cancelAnimationFrame(rafId);
   }, [isPlaying, masterTrack, updatePlayheadDOM]);
 
-  // Handle master audio ended
+  // Handle master audio ended — pause all tracks so non-master tracks stop too
   const handleMasterEnded = useCallback(() => {
+    audioRefsMap.current.forEach((audio) => audio.pause());
     setIsPlaying(false);
   }, []);
 
@@ -631,15 +622,11 @@ export function AudioPlayer({
   // --- Playback controls ---
 
   const playAll = useCallback(() => {
-    const promises: Promise<void>[] = [];
+    if (audioRefsMap.current.size === 0) return;
     audioRefsMap.current.forEach((audio) => {
-      if (audio.src) {
-        promises.push(audio.play().catch(() => {}));
-      }
+      if (audio.src) audio.play().catch(() => {});
     });
-    if (promises.length > 0) {
-      Promise.all(promises).then(() => setIsPlaying(true));
-    }
+    setIsPlaying(true);
   }, []);
 
   const pauseAll = useCallback(() => {
@@ -770,7 +757,7 @@ export function AudioPlayer({
           left="50%"
           transform="translateX(-50%)"
           pointerEvents="none"
-          visibility={waveformMeasured ? "visible" : "hidden"}
+          visibility={waveformWidth > 0 ? "visible" : "hidden"}
         >
           0:00 / 0:00
         </Text>
@@ -854,8 +841,8 @@ export function AudioPlayer({
           position="absolute"
           top={0}
           bottom={0}
-          left={`${waveformLeftRef.current}px`}
-          w={`${waveformWidthRef.current}px`}
+          left={`${waveformLeft}px`}
+          w={`${waveformWidth}px`}
           pointerEvents="none"
           zIndex={10}
           visibility={duration > 0 ? "visible" : "hidden"}
