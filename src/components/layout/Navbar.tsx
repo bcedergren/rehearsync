@@ -1,9 +1,10 @@
 "use client";
 
-import { Box, Flex, Text, Button, Dialog, CloseButton } from "@chakra-ui/react";
+import { Box, Flex, Text, Button, Dialog, CloseButton, MenuRoot, MenuTrigger, MenuContent, MenuItem } from "@chakra-ui/react";
 import { signOut, useSession } from "next-auth/react";
 import { useState } from "react";
-import { Menu } from "lucide-react";
+import { Menu, User, LogOut } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 interface NavbarProps {
   onMenuToggle?: () => void;
@@ -11,6 +12,7 @@ interface NavbarProps {
 
 export function Navbar({ onMenuToggle }: NavbarProps) {
   const { data: session } = useSession();
+  const router = useRouter();
   const [showSignOut, setShowSignOut] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
 
@@ -19,7 +21,6 @@ export function Navbar({ onMenuToggle }: NavbarProps) {
     try {
       await signOut({ redirectTo: "/login" });
     } catch {
-      // NextAuth v5 beta may throw on redirect — fallback
       window.location.href = "/login";
     }
   }
@@ -50,40 +51,46 @@ export function Navbar({ onMenuToggle }: NavbarProps) {
         <Box display={{ base: "none", md: "block" }} />
       </Flex>
 
-      <Flex align="center" gap={{ base: 2, md: 4 }}>
-        <Flex align="center" gap={2}>
-          <Box
-            w="32px"
-            h="32px"
-            borderRadius="full"
-            bg="blue.500"
-            color="white"
-            display="flex"
-            alignItems="center"
-            justifyContent="center"
-            fontSize="sm"
-            fontWeight="bold"
-          >
-            {(session?.user?.name?.[0] || session?.user?.email?.[0] || "?").toUpperCase()}
-          </Box>
-          <Text
-            fontSize="sm"
-            fontWeight="medium"
-            color="gray.700"
-            display={{ base: "none", sm: "block" }}
-          >
-            {session?.user?.name || session?.user?.email || ""}
-          </Text>
-        </Flex>
-        <Button
-          size="sm"
-          variant="outline"
-          colorPalette="gray"
-          onClick={() => setShowSignOut(true)}
-        >
-          Sign Out
-        </Button>
-      </Flex>
+      <MenuRoot>
+        <MenuTrigger asChild>
+          <Button variant="ghost" size="sm" p={1}>
+            <Flex align="center" gap={2}>
+              <Box
+                w="32px"
+                h="32px"
+                borderRadius="full"
+                bg="blue.500"
+                color="white"
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+                fontSize="sm"
+                fontWeight="bold"
+              >
+                {(session?.user?.name?.[0] || session?.user?.email?.[0] || "?").toUpperCase()}
+              </Box>
+              <Text
+                fontSize="sm"
+                fontWeight="medium"
+                color="gray.700"
+                display={{ base: "none", sm: "block" }}
+              >
+                {session?.user?.name || session?.user?.email || ""}
+              </Text>
+            </Flex>
+          </Button>
+        </MenuTrigger>
+        <MenuContent>
+          <MenuItem value="profile" onClick={() => router.push("/profile")}>
+            <User size={16} />
+            <Text ml={2}>Profile</Text>
+          </MenuItem>
+          <MenuItem value="signout" color="red.600" onClick={() => setShowSignOut(true)}>
+            <LogOut size={16} />
+            <Text ml={2}>Sign Out</Text>
+          </MenuItem>
+        </MenuContent>
+      </MenuRoot>
 
       <Dialog.Root open={showSignOut} onOpenChange={(e) => setShowSignOut(e.open)}>
         <Dialog.Backdrop />

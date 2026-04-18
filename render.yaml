@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: rehearsync-websocket
+    runtime: node
+    plan: starter
+    region: oregon
+    buildCommand: npm install && npx prisma generate
+    startCommand: npm run ws:dev
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: WS_PORT
+        value: 3001
+      - key: DATABASE_URL
+        sync: false
+      - key: NEXTAUTH_SECRET
+        sync: false
+    healthCheckPath: /health
+    autoDeploy: true

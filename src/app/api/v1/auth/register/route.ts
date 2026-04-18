@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import * as response from "@/lib/api/response";
-import { sendWelcomeEmail } from "@/lib/email";
+import { sendWelcomeEmail, sendVerificationEmail } from "@/lib/email";
 
 const registerSchema = z.object({
   name: z.string().min(1).max(100),
@@ -36,7 +36,21 @@ export async function POST(req: NextRequest) {
       select: { id: true, name: true, email: true },
     });
 
-    // Send welcome email (fire-and-forget)
+    const verificationToken = crypto.randomUUID();
+    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    await prisma.verificationToken.create({
+      data: {
+        identifier: email,
+        token: verificationToken,
+        expires,
+      },
+    });
+
+    sendVerificationEmail(email, verificationToken).catch((err) =>
+      console.error("Failed to send verification email:", err)
+    );
+
     sendWelcomeEmail(email, name).catch((err) =>
       console.error("Failed to send welcome email:", err)
     );

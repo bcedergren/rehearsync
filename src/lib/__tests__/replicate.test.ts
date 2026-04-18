@@ -33,6 +33,11 @@ describe("MODELS", () => {
     expect(MODELS.BASIC_PITCH.split(":")[1]).toHaveLength(64);
   });
 
+  it("has MR_MT3 model with version hash", () => {
+    expect(MODELS.MR_MT3).toContain("rehearsync/mr-mt3:");
+    expect(MODELS.MR_MT3.split(":")[1]).toHaveLength(64);
+  });
+
   it("has ESSENTIA_BPM model with version hash", () => {
     expect(MODELS.ESSENTIA_BPM).toContain("mtg/essentia-bpm:");
     expect(MODELS.ESSENTIA_BPM.split(":")[1]).toHaveLength(64);
@@ -54,13 +59,25 @@ describe("createStemSeparationPrediction", () => {
 });
 
 describe("createTranscriptionPrediction", () => {
-  it("creates prediction with Basic Pitch model", async () => {
+  it("creates prediction with MR-MT3 model", async () => {
     const result = await createTranscriptionPrediction("https://example.com/stem.mp3");
 
     expect(result).toEqual({ id: "pred-123" });
     expect(mockCreate).toHaveBeenCalledWith({
-      version: MODELS.BASIC_PITCH.split(":")[1],
+      version: MODELS.MR_MT3.split(":")[1],
       input: { audio_file: "https://example.com/stem.mp3" },
+      webhook: "https://test.supabase.co/functions/v1/replicate-webhook",
+      webhook_events_filter: ["completed"],
+    });
+  });
+
+  it("includes stem_name in input when provided", async () => {
+    const result = await createTranscriptionPrediction("https://example.com/stem.mp3", "guitar");
+
+    expect(result).toEqual({ id: "pred-123" });
+    expect(mockCreate).toHaveBeenCalledWith({
+      version: MODELS.MR_MT3.split(":")[1],
+      input: { audio_file: "https://example.com/stem.mp3", stem_name: "guitar" },
       webhook: "https://test.supabase.co/functions/v1/replicate-webhook",
       webhook_events_filter: ["completed"],
     });

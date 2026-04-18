@@ -23,3 +23,9 @@ export const PATCH = withAuth(async (req: NextRequest, ctx, params) => {
   const song = await songService.updateSong(params.songId, parsed.data);
   return response.ok(song);
 });
+
+export const DELETE = withAuth(async (_req, ctx, params) => {
+  await checkFreeTierLock(ctx.userId, { songId: params.songId });
+  await songService.deleteSong(params.songId);
+  return response.ok({ success: true });
+});

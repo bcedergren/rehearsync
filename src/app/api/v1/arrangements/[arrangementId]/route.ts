@@ -26,3 +26,9 @@ export const PATCH = withAuth(async (req: NextRequest, ctx, params) => {
   );
   return response.ok(arrangement);
 });
+
+export const DELETE = withAuth(async (_req, ctx, params) => {
+  await checkFreeTierLock(ctx.userId, { arrangementId: params.arrangementId });
+  await arrangementService.deleteArrangement(params.arrangementId);
+  return response.ok({ success: true });
+});

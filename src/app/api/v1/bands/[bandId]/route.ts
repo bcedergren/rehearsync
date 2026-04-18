@@ -21,3 +21,8 @@ export const PATCH = withBandRole("leader", "admin")(async (req: NextRequest, ct
   const band = await bandService.updateBand(ctx.bandId, parsed.data);
   return response.ok(band);
 });
+
+export const DELETE = withBandRole("leader")(async (_req, ctx) => {
+  await bandService.deleteBand(ctx.bandId);
+  return response.ok({ success: true });
+});
